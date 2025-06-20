@@ -22,7 +22,7 @@ export default function LoginPage() {
         <div className="text-center mt-6">
           <p className="text-gray-600">
             Pas encore de compte ?{" "}
-            <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
               Créer un compte
             </Link>
           </p>
