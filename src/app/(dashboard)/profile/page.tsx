@@ -25,7 +25,7 @@ export default function ProfilePage() {
           <CardContent className="space-y-4">
             <div className="flex justify-between">
               <span className="text-gray-600">Niveau</span>
-              <Badge variant="secondary">Intermédiaire</Badge>
+              <Badge className="bg-gray-300 text-gray-700">Intermédiaire</Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Expérience</span>

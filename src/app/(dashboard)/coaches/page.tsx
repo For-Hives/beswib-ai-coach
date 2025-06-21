@@ -77,7 +77,7 @@ export default function CoachesPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Disponibilité</span>
-                  <Badge variant={coach.available ? "default" : "secondary"}>
+                  <Badge className={coach.available ? undefined : "bg-gray-300 text-gray-700"}>
                     {coach.available ? "Disponible" : "Complet"}
                   </Badge>
                 </div>
@@ -85,9 +85,9 @@ export default function CoachesPage() {
 
               <div className="flex gap-2">
                 <Button
-                  className="flex-1"
+                  className={"flex-1" + (!coach.available ? " bg-gray-200 text-gray-400 border-gray-200" : "")}
                   disabled={!coach.available}
-                  variant={coach.available ? "default" : "secondary"}
+                  variant={coach.available ? "default" : "outline"}
                 >
                   <Calendar className="w-4 h-4 mr-2" />
                   Réserver
