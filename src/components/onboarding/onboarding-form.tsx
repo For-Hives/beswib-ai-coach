@@ -66,11 +66,28 @@ export function OnboardingForm() {
   }
 
   const handleSubmit = async () => {
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
-      router.push("/")
-    }, 2000)
+    setIsLoading(true);
+    // For demo: ask for email (replace with your auth logic)
+    const email = prompt("Entrez votre email pour enregistrer votre profil :");
+    if (!email) {
+      setIsLoading(false);
+      alert("Email requis !");
+      return;
+    }
+    const dataToSave = { ...formData, email };
+
+    const res = await fetch("/api/save-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dataToSave),
+    });
+
+    setIsLoading(false);
+    if (res.ok) {
+      router.push("/");
+    } else {
+      alert("Erreur lors de l'enregistrement du profil.");
+    }
   }
 
   const isStepValid = () => {
