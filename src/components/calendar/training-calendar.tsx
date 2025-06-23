@@ -7,14 +7,19 @@ import { Badge } from "@/components/ui/badge"
 import { ChevronLeft, ChevronRight, CalendarIcon } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-const sessions = [
-  { id: 1, date: "2024-01-15", type: "Endurance", distance: "8 km", duration: "45 min", completed: true },
-  { id: 2, date: "2024-01-17", type: "Fractionné", distance: "6 km", duration: "35 min", completed: true },
-  { id: 3, date: "2024-01-19", type: "Récupération", distance: "5 km", duration: "30 min", completed: false },
-  { id: 4, date: "2024-01-22", type: "Endurance", distance: "10 km", duration: "55 min", completed: false },
-  { id: 5, date: "2024-01-24", type: "Fractionné", distance: "7 km", duration: "40 min", completed: false },
-  { id: 6, date: "2024-01-26", type: "Long", distance: "15 km", duration: "85 min", completed: false },
-]
+export interface TrainingSession {
+  id: number;
+  date: string;
+  type: string;
+  distance: string;
+  duration: string;
+  description?: string;
+  completed?: boolean;
+}
+
+interface TrainingCalendarProps {
+  sessions?: TrainingSession[];
+}
 
 const getSessionColor = (type: string) => {
   switch (type) {
@@ -31,8 +36,8 @@ const getSessionColor = (type: string) => {
   }
 }
 
-export function TrainingCalendar() {
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 15)) // 15 janvier 2024
+export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
+  const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSession, setSelectedSession] = useState<any>(null)
 
   const getDaysInMonth = (date: Date) => {
