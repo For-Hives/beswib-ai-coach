@@ -38,6 +38,11 @@ export async function GET(req: Request) {
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
 
+  // Si le plan existe déjà, le retourner directement
+  if (user.trainingPlan && user.trainingPlan.length > 0) {
+    return NextResponse.json({ text: JSON.stringify({ summary: "", plan: user.trainingPlan }) });
+  }
+
   // Compose le prompt pour l'IA
   const prompt = `
 Pour un coureur avec ce profil :
@@ -82,6 +87,33 @@ Réponds au format suivant (et rien d'autre) :
     system: 'You are a helpful assistant.',
     prompt,
   });
+
+  // Parse le résultat pour stocker le plan
+  let aiResult;
+  try {
+    let raw = text.trim();
+    if (raw.startsWith("```json")) {
+      raw = raw.replace(/^```json/, "").replace(/```$/, "").trim();
+    } else if (raw.startsWith("```")) {
+      raw = raw.replace(/^```/, "").replace(/```$/, "").trim();
+    }
+    raw = raw.split('\n').filter((line: string) => !line.trim().startsWith('//')).join('\n');
+    const firstBrace = raw.indexOf('{');
+    const lastBrace = raw.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      raw = raw.substring(firstBrace, lastBrace + 1);
+    }
+    raw = raw.replace(/,(\s*[}\]])/g, '$1');
+    aiResult = JSON.parse(raw);
+  } catch (e) {
+    return NextResponse.json({ error: "Invalid AI response" }, { status: 500 });
+  }
+
+  // Stocke le plan dans le profil utilisateur
+  await User.findOneAndUpdate(
+    { email },
+    { $set: { trainingPlan: aiResult.plan } }
+  );
 
   return NextResponse.json({ text });
 } 

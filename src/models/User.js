@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema(
       newsletter: Boolean,
     },
     goals: {},
+    trainingPlan: { type: Array, default: [] },
   },
   { timestamps: true }
 );

@@ -28,10 +28,10 @@ export async function POST(req: Request) {
 
   const data = await req.json();
 
-  // On met à jour le champ "profile" du User
+  // On met à jour le champ "profile" du User et on vide le plan
   await User.findOneAndUpdate(
     { email },
-    { $set: { profile: { ...data } } },
+    { $set: { profile: { ...data }, trainingPlan: [] } },
     { upsert: true, new: true }
   );
 
