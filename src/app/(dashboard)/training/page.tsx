@@ -5,13 +5,48 @@ import { TrainingCalendar, TrainingSession } from "@/components/calendar/trainin
 
 export default function TrainingPlanPage() {
   const [plan, setPlan] = useState<TrainingSession[]>([]);
+  const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/training-plan")
+    const token = localStorage.getItem("token");
+    fetch("/api/training-plan", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
       .then((res) => res.json())
       .then((data) => {
-        setPlan(data);
+        console.log("API training-plan response:", data);
+        if (!data.text) {
+          setSummary("Erreur : impossible de générer le plan (profil incomplet ou problème d'authentification).");
+          setPlan([]);
+          setLoading(false);
+          return;
+        }
+        let text = data.text.trim();
+        if (text.startsWith("```json")) {
+          text = text.replace(/^```json/, "").replace(/```$/, "").trim();
+        } else if (text.startsWith("```")) {
+          text = text.replace(/^```/, "").replace(/```$/, "").trim();
+        }
+        text = text.split('\n').filter((line: string) => !line.trim().startsWith('//')).join('\n');
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+          text = text.substring(firstBrace, lastBrace + 1);
+        }
+        // Nettoie les virgules en trop avant ] ou }
+        text = text.replace(/,(\s*[}\]])/g, '$1');
+        console.log("Réponse brute Gemini :", text);
+        const aiResult = JSON.parse(text);
+        setSummary(aiResult.summary);
+        console.log("Plan parsé pour le calendrier :", aiResult.plan);
+        setPlan(aiResult.plan);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching training plan:", err);
         setLoading(false);
       });
   }, []);
@@ -22,6 +57,11 @@ export default function TrainingPlanPage() {
         <h1 className="text-3xl font-bold text-gray-900">Mon plan d'entraînement</h1>
         <p className="text-gray-600">Voici toutes les activités recommandées par l'IA selon votre profil et vos objectifs.</p>
       </div>
+      {summary && (
+        <div className="mb-4 p-4 bg-blue-50 rounded">
+          <p>{summary}</p>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Résumé du plan</CardTitle>

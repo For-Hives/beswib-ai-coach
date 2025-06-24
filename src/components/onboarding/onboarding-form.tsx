@@ -67,24 +67,38 @@ export function OnboardingForm() {
 
   const handleSubmit = async () => {
     setIsLoading(true);
-    // For demo: ask for email (replace with your auth logic)
-    const email = prompt("Entrez votre email pour enregistrer votre profil :");
-    if (!email) {
+
+    // Récupère le token JWT du localStorage
+    const token = localStorage.getItem("token");
+    if (!token) {
       setIsLoading(false);
-      alert("Email requis !");
+      alert("Utilisateur non authentifié !");
       return;
     }
+
+    // Décode le JWT pour récupérer l'email
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const email = payload.email;
+    if (!email) {
+      setIsLoading(false);
+      alert("Impossible de récupérer l'email utilisateur !");
+      return;
+    }
+
     const dataToSave = { ...formData, email };
 
     const res = await fetch("/api/save-profile", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(dataToSave),
     });
 
     setIsLoading(false);
     if (res.ok) {
-      router.push("/");
+      router.push("/dashboard");
     } else {
       alert("Erreur lors de l'enregistrement du profil.");
     }

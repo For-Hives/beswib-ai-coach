@@ -36,6 +36,11 @@ const getSessionColor = (type: string) => {
   }
 }
 
+function parseLocalDate(dateStr: string) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSession, setSelectedSession] = useState<any>(null)
@@ -46,7 +51,7 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    const startingDayOfWeek = (firstDay.getDay() + 6) % 7
 
     const days = []
 
@@ -65,8 +70,14 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
   }
 
   const getSessionsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0]
-    return sessions.filter((session) => session.date === dateStr)
+    return sessions.filter((session) => {
+      const sessionDate = parseLocalDate(session.date);
+      return (
+        sessionDate.getFullYear() === date.getFullYear() &&
+        sessionDate.getMonth() === date.getMonth() &&
+        sessionDate.getDate() === date.getDate()
+      );
+    });
   }
 
   const days = getDaysInMonth(currentDate)
@@ -113,7 +124,7 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-7 gap-1 mb-4">
-          {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"].map((day) => (
+          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => (
             <div key={day} className="p-2 text-center text-sm font-medium text-gray-600">
               {day}
             </div>
@@ -166,6 +177,12 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
                               <p className="text-lg">{session.duration}</p>
                             </div>
                           </div>
+                          {session.description && (
+                            <div className="mt-4">
+                              <p className="text-sm font-medium">Description</p>
+                              <p className="text-gray-700">{session.description}</p>
+                            </div>
+                          )}
                           {session.completed ? (
                             <div className="p-3 bg-green-50 rounded-lg">
                               <p className="text-green-800 font-medium">✓ Séance terminée</p>
