@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Eye, EyeOff, Mail, Lock, User, UserPlus } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/components/auth/AuthProvider";
+
 
 export function SignupForm() {
   const [showPassword, setShowPassword] = useState(false)
@@ -26,6 +28,7 @@ export function SignupForm() {
     acceptTerms: false,
     newsletter: true,
   })
+  const { login } = useAuth();
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,12 +46,40 @@ export function SignupForm() {
 
     setIsLoading(true)
 
-    // Simulation d'une inscription
-    setTimeout(() => {
-      setIsLoading(false)
-      // Redirection vers le dashboard
-      router.push("/")
-    }, 2000)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          profile: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            experience: formData.experience,
+          },
+          preferences: {
+            newsletter: formData.newsletter,
+          },
+          goals: {}, // tu peux l’ajouter plus tard
+        }),
+      });
+    
+      const data = await res.json();
+      console.log('🧾 Réponse backend signup:', data);
+
+    
+      if (!res.ok) throw new Error(data.message || "Erreur à la création du compte");
+    
+      // Ici, si le back renvoie le token + user
+      login(data.token, data.user); // ⬅️ connecte et redirige automatiquement
+    
+      // Sinon, tu peux enchaîner un appel à /login manuellement ici si besoin
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
