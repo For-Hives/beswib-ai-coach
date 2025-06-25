@@ -17,7 +17,13 @@ export default function TrainingPlanPage() {
         Authorization: `Bearer ${token}`,
       },
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || 'Erreur inconnue');
+        }
+        return res.json();
+      })
       .then((data) => {
         console.log("API training-plan response:", data);
         if (!data.text) {
@@ -29,7 +35,7 @@ export default function TrainingPlanPage() {
         let text = data.text.trim();
         if (text.startsWith("```json")) {
           text = text.replace(/^```json/, "").replace(/```$/, "").trim();
-        } else if (text.startsWith("```")) {
+        } else if (text.startsWith("```") ) {
           text = text.replace(/^```/, "").replace(/```$/, "").trim();
         }
         text = text.split('\n').filter((line: string) => !line.trim().startsWith('//')).join('\n');
@@ -48,7 +54,8 @@ export default function TrainingPlanPage() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Error fetching training plan:", err);
+        setSummary("Erreur : " + (err.message || "impossible de générer le plan (profil incomplet ou problème d'authentification)."));
+        setPlan([]);
         setLoading(false);
       });
   }, []);

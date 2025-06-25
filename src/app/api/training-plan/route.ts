@@ -38,48 +38,81 @@ export async function GET(req: Request) {
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
 
+  // Log profil utilisateur
+  console.log('Profil utilisateur utilisé pour le prompt :', userProfile);
+
   // Si le plan existe déjà, le retourner directement
   if (user.trainingPlan && user.trainingPlan.length > 0) {
     return NextResponse.json({ text: JSON.stringify({ summary: "", plan: user.trainingPlan }) });
   }
 
-  // Compose le prompt pour l'IA
+  // Compose le prompt pour l'IA (version enrichie et multi-discipline)
   const prompt = `
-Pour un coureur avec ce profil :
-- Âge : ${userProfile.age}
-- Sexe : ${userProfile.gender}
-- Fréquence d'entraînement : ${userProfile.trainingFrequency} fois/semaine
-- Objectif : ${userProfile.targetDistance}
-- Mois objectif : ${userProfile.targetMonth}
+Tu es un coach sportif expert en ${userProfile.discipline || "running"} (choix possible : running, trail, cyclisme, triathlon). Ton rôle est de générer un plan d'entraînement personnalisé, structuré semaine par semaine, à partir des informations suivantes que je vais te fournir.
 
-La première séance doit être à partir de la date d'aujourd'hui : ${todayStr}
-Génère les séances à partir de cette date, sur 2 à 3 semaines.
+## Données utilisateur :
+- Âge : ${userProfile.age || ""}
+- Sexe : ${userProfile.gender || ""}
+- Fréquence cardiaque max : ${userProfile.maxHeartRate || ""}
+- Fréquence cardiaque de repos : ${userProfile.restingHeartRate || ""}
+- Niveau sportif : ${userProfile.level || userProfile.experience || ""}
+- Expérience dans la discipline : ${userProfile.experience || ""}
+- Sports pratiqués actuellement : ${userProfile.sportsBackground || ""}
+- Fréquence d'entraînement possible (nombre de séances par semaine) : ${userProfile.trainingFrequency || userProfile.weeklyVolume || userProfile.runningFrequency || userProfile.trailFrequency || userProfile.cyclingFrequency || userProfile.triathlonFrequency || ""}
+- Contraintes personnelles (jours disponibles, blessures, autres) : ${userProfile.injuries || userProfile.trailJointIssues || userProfile.triathlonConstraints || ""}
+- Matériel disponible : ${userProfile.material || userProfile.runningTrackAccess || userProfile.cyclingHomeTrainer || userProfile.trailGpsWatch || userProfile.triathlonPoolAccess || userProfile.triathlonBikeAccess || ""}
+- Type de terrain local : ${userProfile.terrain || userProfile.trailMountainTraining || userProfile.trailUphillAccess || ""}
+- Objectif principal : ${userProfile.runningGoal || userProfile.trailRaceGoal || userProfile.cyclingGoal || userProfile.triathlonFormat || ""}
+- Type d'objectif : ${userProfile.type_objectif || userProfile.trailRaceGoal || userProfile.cyclingGoal || userProfile.triathlonFormat || ""}
+- Distance : ${userProfile.distance_km || userProfile.trailRaceGoal || userProfile.cyclingGoal || ""}
+- Dénivelé (si applicable) : ${userProfile.denivele_m || userProfile.trailRaceGoal || ""}
+- Date de l'objectif : ${userProfile.runningGoalDate || userProfile.trailRaceDate || userProfile.cyclingGoalDate || userProfile.triathlonDate || ""}
+- Est-ce un premier objectif ou une nouvelle tentative ? : ${userProfile.objectif_premier || ""}
+- Préparation spécifique déjà commencée ? ${userProfile.prepa_en_cours || ""}
+- Objectif de temps ou de classement (si fourni) : ${userProfile.runningGoalTime || userProfile.objectif_performance || ""}
+- Consentement données : ${userProfile.dataUsageConsent || ""}
+- Consentement notifications : ${userProfile.notificationConsent || ""}
 
-1. Résume l'objectif de l'utilisateur, réfléchis pour voir si c'est réalisable et donne des conseils personnalisés pour atteindre cet objectif.
-2. Génère OBLIGATOIREMENT un plan d'entraînement running basé sur les capacités du user, au format tableau JSON STRICTEMENT VALIDE, pour insertion dans un calendrier.
-   - Le champ "plan" doit être un tableau de 10 à 14 séances, chaque séance au format :
-     {
-       "id": 1,
-       "date": "YYYY-MM-DD",
-       "type": "Endurance",
-       "distance": "8 km",
-       "duration": "45 min",
-       "description": "Séance d'endurance fondamentale"
-     }
-   - Les dates doivent être réalistes et réparties sur 2 à 3 semaines à partir de ${todayStr}.
-   - N'ajoute aucun commentaire, texte ou explication en dehors du JSON.
-   - Ne mets pas de virgule en trop à la fin des tableaux ou objets.
-   - Si tu ne respectes pas ce format, la réponse sera ignorée.
+## Consignes :
 
-Réponds au format suivant (et rien d'autre) :
-{
-  "summary": "...",
-  "plan": [
-    { "id": 1, "date": "${todayStr}", "type": "Endurance", "distance": "8 km", "duration": "45 min", "description": "Séance d'endurance fondamentale" }
-    // ... autres séances ...
-  ]
-}
+1. Calcule le nombre de semaines restantes avant l'objectif à partir de la date actuelle (${todayStr}).
+2. Si l'objectif est dans plus de 8 semaines, structure le plan en deux phases :
+   - Phase générale (renforcement, endurance, travail technique, foncier)
+   - Phase spécifique (adaptée à la course cible)
+3. Si l'objectif est dans 8 semaines ou moins, concentre-toi sur la phase spécifique.
+4. Prévoyez une semaine d'affûtage (tapering) avant l'objectif principal, surtout pour les distances longues.
+5. Adapte le contenu du plan à la discipline choisie :
+   - **Running** : travail VMA, allure spécifique, endurance fondamentale, seuil
+   - **Trail** : sorties longues avec D+, côtes, descentes techniques, rando-course, travail bâtons
+   - **Cyclisme** : endurance, vélocité, PMA, travail au seuil, FTP, home trainer
+   - **Triathlon** : combinaisons natation/vélo/course à pied, transitions, charges réparties intelligemment
+6. Si la saison ou la météo l'impose (ex : hiver), propose des alternatives indoor (home trainer, tapis).
+7. Si des blessures ou limitations sont signalées, adapte les séances pour limiter les risques (ex : éviter les descentes longues si fragilité genoux).
+8. Génère un plan hebdomadaire avec 1 ligne par jour, format :
+   - Jour
+   - Type de séance
+   - Détail de la séance (durée, intensité, zones si connues, terrain, conseils)
+9. Précise si la semaine est allégée (ex. semaine 4, 8, ou semaine d'affûtage) ou de charge.
+10. Termine par un rappel des conseils personnalisés : nutrition, récupération, sommeil, etc.
+11. Si le niveau est débutant, ne surcharge pas la progression.
+12. Si un objectif secondaire est indiqué (ex : course test ou cyclosportive intermédiaire), intègre-le intelligemment.
+13. (Optionnel) Fournis le plan également au format JSON structuré pour intégration dans une application.
+14. Si l'utilisateur n'a pas donné son consentement à l'utilisation des données, indique-le explicitement dans le plan et limite la personnalisation.
+
+## Format de sortie :
+- Titre avec objectif
+- Phase 1 (si applicable) – Semaine X à Y : Nom + résumé
+- Phase 2 – Semaine Y+1 à Z : Nom + résumé
+- Pour chaque semaine : tableau ou bullet jour par jour (jour, séance, détails)
+- Semaine d'affûtage avant l'objectif (si pertinent)
+- Fin : conseils et rappels adaptés au profil
+- (Optionnel) Plan complet au format JSON structuré (tableau des semaines, jours, séances, détails)
+
+IMPORTANT : Réponds STRICTEMENT au format JSON structuré, sans aucun texte, commentaire, balise ou explication autour. Si tu ne respectes pas ce format, la réponse sera ignorée.
 `;
+
+  // Log du prompt envoyé à Gemini
+  console.log('Prompt envoyé à Gemini :', prompt);
 
   // Appel à Gemini
   const { text } = await generateText({
@@ -87,6 +120,9 @@ Réponds au format suivant (et rien d'autre) :
     system: 'You are a helpful assistant.',
     prompt,
   });
+
+  // Log de la réponse brute Gemini
+  console.log('Réponse brute Gemini :', text);
 
   // Parse le résultat pour stocker le plan
   let aiResult;
