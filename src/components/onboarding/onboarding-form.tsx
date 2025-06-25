@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { Activity, ChevronLeft, ChevronRight, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface OnboardingData {
   // Étape 1 - Physiologie
@@ -154,6 +155,7 @@ export function OnboardingForm() {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<OnboardingData>(initialData);
   const [isLoading, setIsLoading] = useState(false);
+  const [showGenerating, setShowGenerating] = useState(false);
   const router = useRouter();
 
   const totalSteps = 5;
@@ -177,11 +179,13 @@ export function OnboardingForm() {
 
   const handleSubmit = async () => {
     setIsLoading(true);
+    setShowGenerating(true);
 
     // Récupère le token JWT du localStorage
     const token = localStorage.getItem("token");
     if (!token) {
       setIsLoading(false);
+      setShowGenerating(false);
       alert("Utilisateur non authentifié !");
       return;
     }
@@ -191,6 +195,7 @@ export function OnboardingForm() {
     const email = payload.email;
     if (!email) {
       setIsLoading(false);
+      setShowGenerating(false);
       alert("Impossible de récupérer l'email utilisateur !");
       return;
     }
@@ -207,8 +212,9 @@ export function OnboardingForm() {
     });
 
     setIsLoading(false);
+    setShowGenerating(false);
     if (res.ok) {
-      router.push("/dashboard");
+      router.push("/training");
     } else {
       alert("Erreur lors de l'enregistrement du profil.");
     }
@@ -994,6 +1000,21 @@ export function OnboardingForm() {
           )}
         </div>
       </CardContent>
+      {/* Popup de génération du plan */}
+      <Dialog open={showGenerating}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Ton plan est en cours de génération...</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-600 text-center">
+              Cela peut prendre quelques secondes.<br />
+              Tu seras redirigé automatiquement vers ton plan d'entraînement.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 } 
