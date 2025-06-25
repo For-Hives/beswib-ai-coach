@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEffect, useState } from "react";
 import { User, Activity, Mountain, Dumbbell, Calendar, Target, Trophy } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 function getDaysTo(dateStr: string) {
   if (!dateStr) return "-";
@@ -15,6 +17,7 @@ function getDaysTo(dateStr: string) {
 export default function CardProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -107,6 +110,11 @@ export default function CardProfilePage() {
 
   return (
     <>
+      <div className="flex gap-4 border-b mb-6">
+        <Link href="/profile" className={pathname === "/profile" ? "font-bold border-b-2 border-blue-600 pb-2" : "pb-2"}>Synthèse</Link>
+        <Link href="/profile/card" className={pathname === "/profile/card" ? "font-bold border-b-2 border-blue-600 pb-2" : "pb-2"}>Card</Link>
+        <Link href="/profile/settings" className={pathname === "/profile/settings" ? "font-bold border-b-2 border-blue-600 pb-2" : "pb-2"}>Paramètres</Link>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Haut gauche */}
         <Card>

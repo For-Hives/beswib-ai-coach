@@ -23,7 +23,12 @@ export async function GET(req: Request) {
   }
 
   const user = await User.findOne({ email });
-  if (!user || !user.profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+  if (!user) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
-  return NextResponse.json({ profile: user.profile });
+  return NextResponse.json({
+    email: user.email,
+    twofaEnabled: user.twofaEnabled,
+    preferences: user.preferences || {},
+    profile: user.profile || {},
+  });
 }
