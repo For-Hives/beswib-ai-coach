@@ -46,11 +46,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const data = await res.json();
           console.log('👤 Utilisateur récupéré :', data);
           setUser(data);
+          localStorage.setItem('profile', JSON.stringify({
+            email: data.email || '',
+            avatar: data.profile?.avatar || '',
+          }));
           setLoading(false); 
         })
         .catch((err) => {
           console.warn('⛔ Erreur fetch /profile:', err.message);
           localStorage.removeItem('token');
+          localStorage.removeItem('profile');
           setToken(null);
           setUser(null);
           router.push('/login');
@@ -66,6 +71,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (userData) {
       setUser(userData);
+      localStorage.setItem('profile', JSON.stringify({
+        email: userData.email || '',
+        avatar: (userData as any).avatar || '',
+      }));
     } else {
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
         method: 'GET',
@@ -78,10 +87,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (!res.ok) throw new Error('Token invalide');
           const data = await res.json();
           setUser(data);
+          localStorage.setItem('profile', JSON.stringify({
+            email: data.email || '',
+            avatar: data.profile?.avatar || '',
+          }));
         })
         .catch((err) => {
           console.warn('⛔ Erreur post-login /profile:', err.message);
           localStorage.removeItem('token');
+          localStorage.removeItem('profile');
           setToken(null);
           setUser(null);
           router.push('/login');
@@ -93,6 +107,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('profile');
     setToken(null);
     setUser(null);
     router.push('/login');

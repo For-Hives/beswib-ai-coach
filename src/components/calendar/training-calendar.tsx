@@ -15,6 +15,7 @@ export interface TrainingSession {
   duration: string;
   description?: string;
   completed?: boolean;
+  details?: string;
 }
 
 interface TrainingCalendarProps {
@@ -36,7 +37,8 @@ const getSessionColor = (type: string) => {
   }
 }
 
-function parseLocalDate(dateStr: string) {
+function parseLocalDate(dateStr: string | null | undefined) {
+  if (!dateStr || typeof dateStr !== "string") return new Date(NaN);
   const [year, month, day] = dateStr.split('-').map(Number);
   return new Date(year, month - 1, day);
 }
@@ -143,61 +145,68 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
                   {day.date.getDate()}
                 </div>
                 <div className="space-y-1 mt-1">
-                  {daysSessions.map((session) => (
-                    <Dialog key={session.id}>
-                      <DialogTrigger asChild>
-                        <div
-                          className={`text-xs p-1 rounded cursor-pointer border ${getSessionColor(session.type)} ${
-                            session.completed ? "opacity-75" : ""
-                          }`}
-                          onClick={() => setSelectedSession(session)}
-                        >
-                          {session.type}
-                          {session.completed && " ✓"}
-                        </div>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Détails de la séance</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2">
-                            <Badge className={getSessionColor(session.type)}>{session.type}</Badge>
-                            <span className="text-sm text-gray-600">
-                              {new Date(session.date).toLocaleDateString("fr-FR")}
-                            </span>
+                  {daysSessions.map((session, idx) => {
+                    const s: any = session;
+                    const key = session.id ?? `${session.date || ''}-${session.type || ''}-${s.semaine || ''}-${s.phase || ''}-${idx}`;
+                    return (
+                      <Dialog key={key}>
+                        <DialogTrigger asChild>
+                          <div
+                            className={`text-xs p-1 rounded cursor-pointer border ${getSessionColor(session.type)} ${
+                              session.completed ? "opacity-75" : ""
+                            }`}
+                            onClick={() => setSelectedSession(session)}
+                          >
+                            {session.type}
+                            {session.completed && " ✓"}
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm font-medium">Distance</p>
-                              <p className="text-lg">{session.distance}</p>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Détails de la séance</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                              <Badge className={getSessionColor(session.type)}>{session.type}</Badge>
+                              <span className="text-sm text-gray-600">
+                                {new Date(session.date).toLocaleDateString("fr-FR")}
+                              </span>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium">Durée</p>
-                              <p className="text-lg">{session.duration}</p>
+                            <div className="grid grid-cols-2 gap-4">
+                              {(session.distance || session.duration) ? (
+                                <>
+                                  <div>
+                                    <p className="text-sm font-medium">Distance</p>
+                                    <p className="text-lg">{session.distance || "-"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium">Durée</p>
+                                    <p className="text-lg">{session.duration || "-"}</p>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="mt-4 col-span-2">
+                                  <p className="text-sm font-medium">Détails</p>
+                                  <p className="text-gray-700">{session.details || session.description || "-"}</p>
+                                </div>
+                              )}
                             </div>
+                            {session.completed ? (
+                              <div className="p-3 bg-green-50 rounded-lg">
+                                <p className="text-green-800 font-medium">✓ Séance terminée</p>
+                                <p className="text-sm text-green-600">Bonne performance ! Continuez ainsi.</p>
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-blue-50 rounded-lg">
+                                <p className="text-blue-800 font-medium">📅 Séance programmée</p>
+                                <p className="text-sm text-blue-600">N'oubliez pas votre séance d'entraînement.</p>
+                              </div>
+                            )}
                           </div>
-                          {session.description && (
-                            <div className="mt-4">
-                              <p className="text-sm font-medium">Description</p>
-                              <p className="text-gray-700">{session.description}</p>
-                            </div>
-                          )}
-                          {session.completed ? (
-                            <div className="p-3 bg-green-50 rounded-lg">
-                              <p className="text-green-800 font-medium">✓ Séance terminée</p>
-                              <p className="text-sm text-green-600">Bonne performance ! Continuez ainsi.</p>
-                            </div>
-                          ) : (
-                            <div className="p-3 bg-blue-50 rounded-lg">
-                              <p className="text-blue-800 font-medium">📅 Séance programmée</p>
-                              <p className="text-sm text-blue-600">N'oubliez pas votre séance d'entraînement.</p>
-                            </div>
-                          )}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  ))}
+                        </DialogContent>
+                      </Dialog>
+                    );
+                  })}
                 </div>
               </div>
             )

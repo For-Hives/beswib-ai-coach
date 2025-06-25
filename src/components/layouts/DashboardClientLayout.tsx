@@ -3,8 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/components/auth/AuthProvider';
-import { AppSidebar } from '@/app/app-sidebar';
-import { Header } from '@/app/header';
+import { Navbar1 } from '@/components/ui/navbar-1';
 
 function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -23,9 +22,9 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full">
-      <AppSidebar />
+      {/* <AppSidebar /> */}
       <div className="flex-1 flex flex-col">
-        <Header />
+        <Navbar1 />
         <main className="flex-1 p-4 md:p-6 bg-gray-50">{children}</main>
       </div>
     </div>

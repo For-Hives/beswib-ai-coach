@@ -48,7 +48,7 @@ export async function GET(req: Request) {
 
   // Compose le prompt pour l'IA (version enrichie et multi-discipline)
   const prompt = `
-Tu es un coach sportif expert en ${userProfile.discipline || "running"} (choix possible : running, trail, cyclisme, triathlon). Ton rôle est de générer un plan d'entraînement personnalisé, structuré semaine par semaine, à partir des informations suivantes que je vais te fournir.
+Tu es un coach sportif expert en ${userProfile.discipline || "running"} (choix possible : running, trail, cyclisme, triathlon). Ton rôle est de générer un plan d'entraînement personnalisé, à partir des informations suivantes que je vais te fournir.
 
 ## Données utilisateur :
 - Âge : ${userProfile.age || ""}
@@ -75,40 +75,65 @@ Tu es un coach sportif expert en ${userProfile.discipline || "running"} (choix p
 
 ## Consignes :
 
-1. Calcule le nombre de semaines restantes avant l'objectif à partir de la date actuelle (${todayStr}).
+1. Calcule le nombre de semaines restantes avant l'objectif à partir de la date actuelle.
 2. Si l'objectif est dans plus de 8 semaines, structure le plan en deux phases :
    - Phase générale (renforcement, endurance, travail technique, foncier)
    - Phase spécifique (adaptée à la course cible)
 3. Si l'objectif est dans 8 semaines ou moins, concentre-toi sur la phase spécifique.
-4. Prévoyez une semaine d'affûtage (tapering) avant l'objectif principal, surtout pour les distances longues.
-5. Adapte le contenu du plan à la discipline choisie :
+4. Adapte le contenu du plan à la discipline choisie :
    - **Running** : travail VMA, allure spécifique, endurance fondamentale, seuil
    - **Trail** : sorties longues avec D+, côtes, descentes techniques, rando-course, travail bâtons
    - **Cyclisme** : endurance, vélocité, PMA, travail au seuil, FTP, home trainer
    - **Triathlon** : combinaisons natation/vélo/course à pied, transitions, charges réparties intelligemment
-6. Si la saison ou la météo l'impose (ex : hiver), propose des alternatives indoor (home trainer, tapis).
-7. Si des blessures ou limitations sont signalées, adapte les séances pour limiter les risques (ex : éviter les descentes longues si fragilité genoux).
-8. Génère un plan hebdomadaire avec 1 ligne par jour, format :
+5. Génère un plan hebdomadaire avec 1 ligne par jour, format :
    - Jour
    - Type de séance
    - Détail de la séance (durée, intensité, zones si connues, terrain, conseils)
-9. Précise si la semaine est allégée (ex. semaine 4, 8, ou semaine d'affûtage) ou de charge.
-10. Termine par un rappel des conseils personnalisés : nutrition, récupération, sommeil, etc.
-11. Si le niveau est débutant, ne surcharge pas la progression.
-12. Si un objectif secondaire est indiqué (ex : course test ou cyclosportive intermédiaire), intègre-le intelligemment.
-13. (Optionnel) Fournis le plan également au format JSON structuré pour intégration dans une application.
-14. Si l'utilisateur n'a pas donné son consentement à l'utilisation des données, indique-le explicitement dans le plan et limite la personnalisation.
+6. Précise si la semaine est allégée (ex. semaine 4, 8) ou de charge.
+7. Termine par un rappel des conseils personnalisés : nutrition, récupération, sommeil, etc.
+8. Si le niveau est débutant, ne surcharge pas la progression.
+9. Si un objectif secondaire est indiqué (ex : course test ou cyclosportive intermédiaire), intègre-le intelligemment.
 
-## Format de sortie :
-- Titre avec objectif
-- Phase 1 (si applicable) – Semaine X à Y : Nom + résumé
-- Phase 2 – Semaine Y+1 à Z : Nom + résumé
-- Pour chaque semaine : tableau ou bullet jour par jour (jour, séance, détails)
-- Semaine d'affûtage avant l'objectif (si pertinent)
-- Fin : conseils et rappels adaptés au profil
-- (Optionnel) Plan complet au format JSON structuré (tableau des semaines, jours, séances, détails)
+## Format de sortie strictement attendu (JSON OBLIGATOIRE) :
+- Un champ 'plan' qui est un tableau à plat, chaque séance étant un objet avec :
+   - date (obligatoire, format YYYY-MM-DD, la première séance commence aujourd'hui ou le prochain lundi, la dernière séance - la course - doit être à la date d'objectif)
+   - type (ex : Course, Repos, VTT, Fractionné, etc.)
+   - distance (optionnel)
+   - duration (optionnel)
+   - details ou description (optionnel)
+- Un champ 'conseils' qui est un tableau de strings (rappels, conseils personnalisés, nutrition, récupération, etc.) à afficher sous le calendrier.
 
-IMPORTANT : Réponds STRICTEMENT au format JSON structuré, sans aucun texte, commentaire, balise ou explication autour. Si tu ne respectes pas ce format, la réponse sera ignorée.
+### Exemple de format JSON attendu :
+{
+  "plan": [
+    {
+      "date": "2025-07-14",
+      "type": "Course",
+      "distance": "10 km",
+      "duration": "50 min",
+      "details": "Allure modérée, terrain vallonné"
+    },
+    {
+      "date": "2025-07-15",
+      "type": "Repos"
+    },
+    ...
+    {
+      "date": "2025-08-02",
+      "type": "Course (Objectif)",
+      "details": "Jour de la course ! 70km, 3400D+"
+    }
+  ],
+  "conseils": [
+    "Hydratation régulière",
+    "Alimentation équilibrée riche en glucides",
+    "Sommeil suffisant (7-9h par nuit)",
+    "Écouter son corps et adapter les séances en fonction",
+    "Bien récupérer entre les séances"
+  ]
+}
+
+IMPORTANT : Réponds STRICTEMENT au format JSON structuré ci-dessus, sans aucun texte, commentaire, balise ou explication autour. Si tu ne respectes pas ce format, la réponse sera ignorée.
 `;
 
   // Log du prompt envoyé à Gemini
@@ -130,10 +155,10 @@ IMPORTANT : Réponds STRICTEMENT au format JSON structuré, sans aucun texte, co
     let raw = text.trim();
     if (raw.startsWith("```json")) {
       raw = raw.replace(/^```json/, "").replace(/```$/, "").trim();
-    } else if (raw.startsWith("```")) {
+    } else if (raw.startsWith("```") ) {
       raw = raw.replace(/^```/, "").replace(/```$/, "").trim();
     }
-    raw = raw.split('\n').filter((line: string) => !line.trim().startsWith('//')).join('\n');
+    raw = raw.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
     const firstBrace = raw.indexOf('{');
     const lastBrace = raw.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
@@ -145,7 +170,7 @@ IMPORTANT : Réponds STRICTEMENT au format JSON structuré, sans aucun texte, co
     return NextResponse.json({ error: "Invalid AI response" }, { status: 500 });
   }
 
-  // Stocke le plan dans le profil utilisateur
+  // Stocke directement le plan Gemini (déjà à plat avec dates)
   await User.findOneAndUpdate(
     { email },
     { $set: { trainingPlan: aiResult.plan } }
