@@ -1,7 +1,6 @@
 import { NextSessionCard } from "@/components/dashboard/next-session-card"
 import { ProgressChart } from "@/components/dashboard/progress-chart"
 import KeyMetrics from "@/components/dashboard/key-metrics"
-import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import RecentActivities from "@/components/strava/RecentActivities"
 
 export default function Dashboard() {
@@ -21,7 +20,6 @@ export default function Dashboard() {
         <div className="space-y-6">
           <RecentActivities />
           <KeyMetrics />
-          <ActivityFeed />
         </div>
       </div>
     </div>

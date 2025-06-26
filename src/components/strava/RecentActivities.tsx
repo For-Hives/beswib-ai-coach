@@ -59,12 +59,39 @@ function getFeedback(type: string): string {
   }
 }
 
+function getSportIcon(type: string) {
+  switch (type) {
+    case "Run": return "🏃";
+    case "Ride": return "🚴";
+    case "Swim": return "🏊";
+    default: return "🏅";
+  }
+}
+
+function getSportLabel(type: string) {
+  switch (type) {
+    case "Run": return "Course à pied";
+    case "Ride": return "Vélo";
+    case "Swim": return "Natation";
+    default: return type;
+  }
+}
+
 export default function RecentActivities() {
   const [activities, setActivities] = useState<Activity[]>([]);
   useEffect(() => {
-    axios.get("/api/strava/activities", {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    axios.get(`${apiUrl}/api/strava/activities`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    }).then(res => setActivities(res.data.slice(0, 5)));
+    })
+      .then(res => setActivities(res.data.slice(0, 5)))
+      .catch(e => {
+        if (e.response) {
+          console.error(`Erreur API activities: ${e.response.status}`, e.response.data);
+        } else {
+          console.error(e);
+        }
+      });
   }, []);
 
   return (
@@ -73,22 +100,22 @@ export default function RecentActivities() {
       <p className="text-gray-500 mb-4">Dernières séances avec feedback IA</p>
       <div className="space-y-4">
         {activities.map((act) => {
-          const type = getType(act);
           return (
             <Card key={act.strava_id} className="">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Badge className={typeColors[type] || "bg-gray-100 text-gray-800"}>{type}</Badge>
+                  <span className="text-xl">{getSportIcon(act.type)}</span>
+                  <span className="font-semibold text-gray-800">{getSportLabel(act.type)}</span>
                   <span className="text-xs text-gray-500 ml-auto">{getRelativeDate(act.start_date)}</span>
                 </div>
                 <div className="flex gap-6 text-sm text-gray-700 mb-2">
-                  <span>🏃 {(act.distance/1000).toFixed(1)} km</span>
+                  <span>{(act.distance/1000).toFixed(1)} km</span>
                   <span>🕒 {Math.round(act.moving_time/60)} min</span>
                   <span>⚡ {getPace(act)}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <Badge className="bg-purple-100 text-purple-800">IA</Badge>
-                  <span className="text-sm text-gray-700">{getFeedback(type)}</span>
+                  <span className="text-sm text-gray-700">{getFeedback(act.type)}</span>
                 </div>
               </CardContent>
             </Card>

@@ -9,25 +9,60 @@ export default function KeyMetrics() {
   const [activities, setActivities] = useState<any[]>([]);
   const [prevMonth, setPrevMonth] = useState<number>(0);
   const [goal, setGoal] = useState<any>(null);
+  const [trainingPlan, setTrainingPlan] = useState<any[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    fetch("/api/strava/summary", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(setSummary);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-    fetch("/api/strava/activities", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(setActivities);
+    fetch(`${apiUrl}/api/strava/summary`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async r => {
+        if (!r.ok) throw new Error(`Erreur API summary: ${r.status}`);
+        return r.json();
+      })
+      .then(setSummary)
+      .catch(e => console.error(e));
+
+    fetch(`${apiUrl}/api/strava/activities`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async r => {
+        if (!r.ok) throw new Error(`Erreur API activities: ${r.status}`);
+        return r.json();
+      })
+      .then(setActivities)
+      .catch(e => console.error(e));
 
     fetch("/api/profile", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(setGoal);
+      .then(async r => {
+        if (!r.ok) throw new Error(`Erreur API profile: ${r.status}`);
+        return r.json();
+      })
+      .then(setGoal)
+      .catch(e => console.error(e));
 
     // Récupère le volume du mois précédent
-    fetch("/api/strava/summary?prevMonth=1", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => setPrevMonth(data?.month?.distance || 0));
+    fetch(`${apiUrl}/api/strava/summary?prevMonth=1`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async r => {
+        if (!r.ok) throw new Error(`Erreur API summary prevMonth: ${r.status}`);
+        return r.json();
+      })
+      .then(data => setPrevMonth(data?.month?.distance || 0))
+      .catch(e => console.error(e));
+
+    // Ajout fetch du training plan pour la date objectif
+    fetch("/api/training-plan", { headers: { Authorization: `Bearer ${token}` } })
+      .then(async r => {
+        if (!r.ok) throw new Error(`Erreur API training-plan: ${r.status}`);
+        return r.json();
+      })
+      .then(data => {
+        try {
+          const plan = typeof data.text === "string" ? JSON.parse(data.text).plan : [];
+          setTrainingPlan(plan);
+        } catch (e) {
+          setTrainingPlan([]);
+        }
+      })
+      .catch(e => console.error(e));
   }, []);
 
   // Calculs
@@ -36,7 +71,24 @@ export default function KeyMetrics() {
   const nSessionsPlanned = 20; // à adapter si tu as un plan
   const percentSessions = nSessionsPlanned ? Math.round((nSessions / nSessionsPlanned) * 100) : 0;
   const progression = prevMonth ? Math.round(((summary?.month?.distance - prevMonth) / prevMonth) * 100) : 0;
-  const weeksLeft = goal?.weeksLeft || 12; // à calculer selon la date d'objectif
+
+  // Correction du calcul des semaines restantes
+  // On privilégie la date de la dernière séance du plan si dispo
+  let objectifDate = null;
+  if (trainingPlan.length > 0) {
+    objectifDate = trainingPlan[trainingPlan.length - 1].date;
+  } else {
+    objectifDate = goal?.runningGoalDate || goal?.trailRaceDate || goal?.cyclingGoalDate || goal?.triathlonDate;
+  }
+  function getWeeksLeft(dateStr: string) {
+    if (!dateStr) return "-";
+    const now = new Date();
+    const target = new Date(dateStr);
+    const diff = (target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 7);
+    return diff > 0 ? Math.ceil(diff) : 0;
+  }
+  const weeksLeft = getWeeksLeft(objectifDate);
+
   const percentGoal = 78; // à calculer selon ta logique
 
   return (
