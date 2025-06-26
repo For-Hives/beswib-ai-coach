@@ -20,6 +20,7 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [avatar, setAvatar] = useState(profile?.avatar || "")
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [stravaPrs, setStravaPrs] = useState<any>(null)
   const pathname = usePathname()
 
   useEffect(() => {
@@ -35,6 +36,15 @@ export default function ProfilePage() {
         setAvatar(data.profile?.avatar || "")
         setLoading(false)
       })
+  }, [])
+
+  useEffect(() => {
+    const token = localStorage.getItem("token")
+    fetch("http://localhost:5000/api/strava/prs", {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(setStravaPrs)
   }, [])
 
   const handleEdit = () => {
@@ -119,6 +129,37 @@ export default function ProfilePage() {
               <Settings className="w-4 h-4 mr-2" />
               Modifier le profil
             </Button>
+            <div className="mt-4 flex justify-center">
+              <Button
+                className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 font-semibold"
+                onClick={() => {
+                  const token = localStorage.getItem("token") || "";
+                  const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID || "";
+                  const redirectUri = encodeURIComponent(process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI || "http://localhost:5000/api/strava/callback");
+                  const scope = 'activity:read_all,profile:read_all';
+                  const url = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&approval_prompt=auto&scope=${scope}&state=${token}`;
+                  console.log(process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID)
+                  console.log(process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI)
+                  window.location.href = url;
+                }}
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24"><path d="M12 2l4.5 9h-9L12 2zm0 20l-4.5-9h9L12 22z" fill="currentColor"/></svg>
+                Connecter mon Strava
+              </Button>
+            </div>
+            <Button
+              className="mt-4 bg-blue-600 text-white"
+              onClick={async () => {
+                const token = localStorage.getItem("token");
+                const res = await fetch("http://localhost:5000/api/strava/sync", {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                alert(data.message || "Synchronisation terminée !");
+              }}
+            >
+              Synchroniser mes activités Strava
+            </Button>
           </CardContent>
         </Card>
 
@@ -164,6 +205,73 @@ export default function ProfilePage() {
                   <p className="text-sm text-gray-600">Séances réalisées</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-yellow-600" />
+                Stats Strava
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {stravaPrs ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Running */}
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <p className="font-semibold text-blue-900 mb-2">Running</p>
+                      <div><b>Distance totale :</b> {(stravaPrs.all_run_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.all_run_totals?.count}</div>
+                      <div><b>Dénivelé cumulé :</b> {Math.round(stravaPrs.all_run_totals?.elevation_gain || 0)} m</div>
+                      <div className="mt-2 text-sm text-blue-800 font-semibold">Année en cours</div>
+                      <div><b>Distance :</b> {(stravaPrs.ytd_run_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.ytd_run_totals?.count}</div>
+                      <div><b>Dénivelé :</b> {Math.round(stravaPrs.ytd_run_totals?.elevation_gain || 0)} m</div>
+                      <div className="mt-2 text-sm text-blue-800 font-semibold">4 dernières semaines</div>
+                      <div><b>Distance :</b> {(stravaPrs.recent_run_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.recent_run_totals?.count}</div>
+                      <div><b>Dénivelé :</b> {Math.round(stravaPrs.recent_run_totals?.elevation_gain || 0)} m</div>
+                    </div>
+                    {/* Cyclisme */}
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <p className="font-semibold text-green-900 mb-2">Cyclisme</p>
+                      <div><b>Distance totale :</b> {(stravaPrs.all_ride_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.all_ride_totals?.count}</div>
+                      <div><b>Dénivelé cumulé :</b> {Math.round(stravaPrs.all_ride_totals?.elevation_gain || 0)} m</div>
+                      <div className="mt-2 text-sm text-green-800 font-semibold">Année en cours</div>
+                      <div><b>Distance :</b> {(stravaPrs.ytd_ride_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.ytd_ride_totals?.count}</div>
+                      <div><b>Dénivelé :</b> {Math.round(stravaPrs.ytd_ride_totals?.elevation_gain || 0)} m</div>
+                      <div className="mt-2 text-sm text-green-800 font-semibold">4 dernières semaines</div>
+                      <div><b>Distance :</b> {(stravaPrs.recent_ride_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.recent_ride_totals?.count}</div>
+                      <div><b>Dénivelé :</b> {Math.round(stravaPrs.recent_ride_totals?.elevation_gain || 0)} m</div>
+                      <div className="mt-2 text-sm text-green-800 font-semibold">Records</div>
+                      <div><b>Plus longue sortie :</b> {(stravaPrs.biggest_ride_distance / 1000).toFixed(1)} km</div>
+                      <div><b>Plus gros dénivelé :</b> {Math.round(stravaPrs.biggest_climb_elevation_gain || 0)} m</div>
+                    </div>
+                    {/* Natation */}
+                    <div className="bg-purple-50 rounded-lg p-4">
+                      <p className="font-semibold text-purple-900 mb-2">Natation</p>
+                      <div><b>Distance totale :</b> {(stravaPrs.all_swim_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.all_swim_totals?.count}</div>
+                      <div><b>Temps total :</b> {Math.round((stravaPrs.all_swim_totals?.moving_time || 0) / 60)} min</div>
+                      <div className="mt-2 text-sm text-purple-800 font-semibold">Année en cours</div>
+                      <div><b>Distance :</b> {(stravaPrs.ytd_swim_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.ytd_swim_totals?.count}</div>
+                      <div><b>Temps :</b> {Math.round((stravaPrs.ytd_swim_totals?.moving_time || 0) / 60)} min</div>
+                      <div className="mt-2 text-sm text-purple-800 font-semibold">4 dernières semaines</div>
+                      <div><b>Distance :</b> {(stravaPrs.recent_swim_totals?.distance / 1000).toFixed(1)} km</div>
+                      <div><b>Séances :</b> {stravaPrs.recent_swim_totals?.count}</div>
+                      <div><b>Temps :</b> {Math.round((stravaPrs.recent_swim_totals?.moving_time || 0) / 60)} min</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500">Aucune statistique Strava trouvée.</p>
+              )}
             </CardContent>
           </Card>
         </div>

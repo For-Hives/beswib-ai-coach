@@ -16,6 +16,8 @@ export interface TrainingSession {
   description?: string;
   completed?: boolean;
   details?: string;
+  average_speed?: number | string;
+  average_heartrate?: number;
 }
 
 interface TrainingCalendarProps {
@@ -62,6 +64,16 @@ function detectSessionType(session: TrainingSession): string {
     return "Récupération";
   }
   return "Endurance";
+}
+
+function convertSpeedToPace(speed: number | string | undefined) {
+  if (!speed) return "-";
+  const s = typeof speed === "string" ? parseFloat(speed) : speed;
+  if (!s || isNaN(s)) return "-";
+  const pace = 1000 / (s * 60); // m/s → min/km
+  const min = Math.floor(pace);
+  const sec = Math.round((pace - min) * 60).toString().padStart(2, "0");
+  return `${min}:${sec} min/km`;
 }
 
 export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
@@ -212,6 +224,22 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
                                   </div>
                                 </>
                               ) : null}
+                              {(session.average_speed || session.average_heartrate) && (
+                                <>
+                                  {session.average_speed && (
+                                    <div>
+                                      <p className="text-sm font-medium">Allure moyenne</p>
+                                      <p className="text-lg">{convertSpeedToPace(session.average_speed)}</p>
+                                    </div>
+                                  )}
+                                  {session.average_heartrate && (
+                                    <div>
+                                      <p className="text-sm font-medium">FC Moyenne</p>
+                                      <p className="text-lg">{session.average_heartrate} bpm</p>
+                                    </div>
+                                  )}
+                                </>
+                              )}
                             </div>
                             {(session.details || session.description) && (
                               <div className="mt-2">
