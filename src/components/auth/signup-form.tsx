@@ -47,7 +47,7 @@ export function SignupForm() {
     setIsLoading(true)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/register`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -61,7 +61,7 @@ export function SignupForm() {
           preferences: {
             newsletter: formData.newsletter,
           },
-          goals: {}, // tu peux l’ajouter plus tard
+          goals: {}, // tu peux l'ajouter plus tard
         }),
       });
     

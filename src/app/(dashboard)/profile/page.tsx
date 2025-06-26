@@ -40,7 +40,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const token = localStorage.getItem("token")
-    fetch("http://localhost:5000/api/strava/prs", {
+    fetch("http://localhost:3000/api/strava/prs", {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(r => r.json())
@@ -135,7 +135,7 @@ export default function ProfilePage() {
                 onClick={() => {
                   const token = localStorage.getItem("token") || "";
                   const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID || "";
-                  const redirectUri = encodeURIComponent(process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI || "http://localhost:5000/api/strava/callback");
+                  const redirectUri = encodeURIComponent(process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI || "http://localhost:3000/api/strava/callback");
                   const scope = 'activity:read_all,profile:read_all';
                   const url = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&approval_prompt=auto&scope=${scope}&state=${token}`;
                   console.log(process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID)
@@ -151,7 +151,7 @@ export default function ProfilePage() {
               className="mt-4 bg-blue-600 text-white"
               onClick={async () => {
                 const token = localStorage.getItem("token");
-                const res = await fetch("http://localhost:5000/api/strava/sync", {
+                const res = await fetch("http://localhost:3000/api/strava/sync", {
                   headers: { Authorization: `Bearer ${token}` }
                 });
                 const data = await res.json();

@@ -13,7 +13,7 @@ export default function KeyMetrics() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
     fetch(`${apiUrl}/api/strava/summary`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async r => {

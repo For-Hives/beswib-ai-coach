@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (storedToken) {
       setToken(storedToken);
       setLoading(true); 
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/profile`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         avatar: (userData as any).avatar || '',
       }));
     } else {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/profile`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

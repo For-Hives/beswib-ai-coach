@@ -80,7 +80,7 @@ function getSportLabel(type: string) {
 export default function RecentActivities() {
   const [activities, setActivities] = useState<Activity[]>([]);
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
     axios.get(`${apiUrl}/api/strava/activities`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
     })
