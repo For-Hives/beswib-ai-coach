@@ -32,6 +32,8 @@ const getSessionColor = (type: string) => {
       return "bg-blue-100 text-blue-800 border-blue-200"
     case "Long":
       return "bg-purple-100 text-purple-800 border-purple-200"
+    case "Renforcement musculaire":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200"
     default:
       return "bg-gray-100 text-gray-800 border-gray-200"
   }
@@ -41,6 +43,25 @@ function parseLocalDate(dateStr: string | null | undefined) {
   if (!dateStr || typeof dateStr !== "string") return new Date(NaN);
   const [year, month, day] = dateStr.split('-').map(Number);
   return new Date(year, month - 1, day);
+}
+
+function detectSessionType(session: TrainingSession): string {
+  if (session.type === "Renforcement musculaire") {
+    return "Renforcement musculaire";
+  }
+  if (session.distance) {
+    const match = session.distance.match(/(\d+([.,]\d+)?)\s*km/i);
+    if (match && parseFloat(match[1].replace(',', '.')) >= 20) {
+      return "Long";
+    }
+  }
+  if (session.description?.toLowerCase().includes("fractionné")) {
+    return "Fractionné";
+  }
+  if (session.description?.toLowerCase().includes("allure lente de récupération")) {
+    return "Récupération";
+  }
+  return "Endurance";
 }
 
 export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
@@ -74,6 +95,7 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
   const getSessionsForDate = (date: Date) => {
     return sessions.filter((session) => {
       const sessionDate = parseLocalDate(session.date);
+      if (!session.distance && detectSessionType(session) !== "Renforcement musculaire") return false;
       return (
         sessionDate.getFullYear() === date.getFullYear() &&
         sessionDate.getMonth() === date.getMonth() &&
@@ -148,26 +170,31 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
                   {daysSessions.map((session, idx) => {
                     const s: any = session;
                     const key = session.id ?? `${session.date || ''}-${session.type || ''}-${s.semaine || ''}-${s.phase || ''}-${idx}`;
+                    const descId = `session-desc-${key}`;
+                    const sessionType = detectSessionType(session);
                     return (
                       <Dialog key={key}>
                         <DialogTrigger asChild>
                           <div
-                            className={`text-xs p-1 rounded cursor-pointer border ${getSessionColor(session.type)} ${
+                            className={`text-xs p-1 rounded cursor-pointer border ${getSessionColor(sessionType)} ${
                               session.completed ? "opacity-75" : ""
                             }`}
                             onClick={() => setSelectedSession(session)}
                           >
-                            {session.type}
+                            {sessionType}
                             {session.completed && " ✓"}
                           </div>
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent aria-describedby={descId}>
                           <DialogHeader>
                             <DialogTitle>Détails de la séance</DialogTitle>
                           </DialogHeader>
+                          <p id={descId} className="sr-only">
+                            Détail complet de la séance d'entraînement sélectionnée, incluant type, date, distance, durée et description.
+                          </p>
                           <div className="space-y-4">
                             <div className="flex items-center gap-2">
-                              <Badge className={getSessionColor(session.type)}>{session.type}</Badge>
+                              <Badge className={getSessionColor(sessionType)}>{sessionType}</Badge>
                               <span className="text-sm text-gray-600">
                                 {new Date(session.date).toLocaleDateString("fr-FR")}
                               </span>
@@ -184,13 +211,14 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
                                     <p className="text-lg">{session.duration || "-"}</p>
                                   </div>
                                 </>
-                              ) : (
-                                <div className="mt-4 col-span-2">
-                                  <p className="text-sm font-medium">Détails</p>
-                                  <p className="text-gray-700">{session.details || session.description || "-"}</p>
-                                </div>
-                              )}
+                              ) : null}
                             </div>
+                            {(session.details || session.description) && (
+                              <div className="mt-2">
+                                <p className="text-sm font-medium">Description</p>
+                                <p className="text-gray-700">{session.details || session.description}</p>
+                              </div>
+                            )}
                             {session.completed ? (
                               <div className="p-3 bg-green-50 rounded-lg">
                                 <p className="text-green-800 font-medium">✓ Séance terminée</p>
@@ -229,6 +257,10 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-purple-100 border border-purple-200 rounded"></div>
             <span className="text-sm">Long</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-yellow-100 border border-yellow-200 rounded"></div>
+            <span className="text-sm">Renforcement musculaire</span>
           </div>
         </div>
       </CardContent>

@@ -35,8 +35,9 @@ export async function GET(req: Request) {
   }
   const userProfile = user.profile;
 
-  const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
+  // Utilise la date d'aujourd'hui du profil si présente, sinon la date système
+  const todayStr = userProfile.today || new Date().toISOString().split("T")[0];
+  const today = new Date(todayStr);
 
   // Log profil utilisateur
   console.log('Profil utilisateur utilisé pour le prompt :', userProfile);
@@ -80,7 +81,7 @@ Tu es un coach sportif expert en ${userProfile.discipline || "running"} (choix p
    - Phase générale (renforcement, endurance, travail technique, foncier)
    - Phase spécifique (adaptée à la course cible)
 3. Si l'objectif est dans 8 semaines ou moins, concentre-toi sur la phase spécifique.
-4. Adapte le contenu du plan à la discipline choisie :
+4. Adapte le contenu du plan à la discipline choisie (type de séance):
    - **Running** : travail VMA, allure spécifique, endurance fondamentale, seuil
    - **Trail** : sorties longues avec D+, côtes, descentes techniques, rando-course, travail bâtons
    - **Cyclisme** : endurance, vélocité, PMA, travail au seuil, FTP, home trainer
@@ -88,20 +89,22 @@ Tu es un coach sportif expert en ${userProfile.discipline || "running"} (choix p
 5. Génère un plan hebdomadaire avec 1 ligne par jour, format :
    - Jour
    - Type de séance
-   - Détail de la séance (durée, intensité, zones si connues, terrain, conseils)
+   - Détail de la séance (durée, intensité, zones et allure recommandées, terrain, conseils)
 6. Précise si la semaine est allégée (ex. semaine 4, 8) ou de charge.
 7. Termine par un rappel des conseils personnalisés : nutrition, récupération, sommeil, etc.
 8. Si le niveau est débutant, ne surcharge pas la progression.
 9. Si un objectif secondaire est indiqué (ex : course test ou cyclosportive intermédiaire), intègre-le intelligemment.
 
+**IMPORTANT : La première séance du plan doit obligatoirement commencer à la date d'aujourd'hui (${todayStr}), et toutes les dates du plan doivent être postérieures ou égales à cette date.**
+
 ## Format de sortie strictement attendu (JSON OBLIGATOIRE) :
 - Un champ 'plan' qui est un tableau à plat, chaque séance étant un objet avec :
    - date (obligatoire, format YYYY-MM-DD, la première séance commence aujourd'hui ou le prochain lundi, la dernière séance - la course - doit être à la date d'objectif)
-   - type (ex : Course, Repos, VTT, Fractionné, etc.)
-   - distance (optionnel)
-   - duration (optionnel)
-   - details ou description (optionnel)
-- Un champ 'conseils' qui est un tableau de strings (rappels, conseils personnalisés, nutrition, récupération, etc.) à afficher sous le calendrier.
+   - type de séance(ex : Course, Repos, VTT, Fractionné, etc.)
+   - distance 
+   - duration 
+   - description mentionnant les zones et allure recommandées / terrain (optionnel, terrain de la séance, dénivéel) / conseil spécifique de la séance et intérêt pour le sportif
+   - conseils (obligatoire, tableau de strings, rappels, conseils personnalisés, nutrition, récupération, etc.) à afficher sous le calendrier.
 
 ### Exemple de format JSON attendu :
 {
@@ -168,6 +171,16 @@ IMPORTANT : Réponds STRICTEMENT au format JSON structuré ci-dessus, sans aucun
     aiResult = JSON.parse(raw);
   } catch (e) {
     return NextResponse.json({ error: "Invalid AI response" }, { status: 500 });
+  }
+
+  // Correction des dates si Gemini hallucine
+  if (Array.isArray(aiResult.plan) && aiResult.plan.length > 0) {
+    const startDate = new Date(todayStr);
+    aiResult.plan.forEach((session: any, idx: any) => {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + idx);
+      session.date = date.toISOString().split('T')[0];
+    });
   }
 
   // Stocke directement le plan Gemini (déjà à plat avec dates)

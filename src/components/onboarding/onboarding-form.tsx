@@ -200,7 +200,7 @@ export function OnboardingForm() {
       return;
     }
 
-    const dataToSave = { ...formData, email };
+    const dataToSave = { ...formData, email, today: new Date().toISOString().split("T")[0] };
 
     const res = await fetch("/api/save-profile", {
       method: "POST",
@@ -375,15 +375,15 @@ export function OnboardingForm() {
               <h3 className="text-xl font-semibold mb-2">Questions spécifiques Running</h3>
               <p className="text-gray-600">Affinons ton plan pour la course à pied</p>
             </div>
-            <div className="space-y-2">
+              <div className="space-y-2">
               <Label htmlFor="runningGoal">Quel est ton objectif ?</Label>
               <Select value={formData.runningGoal} onValueChange={value => updateFormData("runningGoal", value)}>
-                <SelectTrigger>
+                  <SelectTrigger>
                   <SelectValue placeholder="Choisis un objectif" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5k">5 km</SelectItem>
-                  <SelectItem value="10k">10 km</SelectItem>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5k">5 km</SelectItem>
+                    <SelectItem value="10k">10 km</SelectItem>
                   <SelectItem value="semi-marathon">Semi-marathon</SelectItem>
                   <SelectItem value="marathon">Marathon</SelectItem>
                   <SelectItem value="autre">Autre</SelectItem>
@@ -428,24 +428,24 @@ export function OnboardingForm() {
                   <SelectItem value="4">4</SelectItem>
                   <SelectItem value="5">5</SelectItem>
                   <SelectItem value="6+">6+</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
               <Label htmlFor="runningRecentRace">As-tu des références récentes (temps sur course) ?</Label>
               <Input id="runningRecentRace" type="text" placeholder="Ex : 10 km en 45 min" value={formData.runningRecentRace} onChange={e => updateFormData("runningRecentRace", e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="runningTrackAccess">As-tu accès à une piste d'athlétisme ?</Label>
               <Select value={formData.runningTrackAccess} onValueChange={value => updateFormData("runningTrackAccess", value)}>
-                <SelectTrigger>
+                  <SelectTrigger>
                   <SelectValue placeholder="Sélectionne" />
-                </SelectTrigger>
-                <SelectContent>
+                  </SelectTrigger>
+                  <SelectContent>
                   <SelectItem value="oui">Oui</SelectItem>
                   <SelectItem value="non">Non</SelectItem>
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="runningSessionStyle">Préférences de séances</Label>
