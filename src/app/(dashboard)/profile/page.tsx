@@ -4,12 +4,32 @@ import { Avatar, AvatarFallback, AvatarImage as AvatarImg } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Settings, Trophy, Target, Calendar, Pencil, Trash2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, ChangeEvent, FormEvent } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import apiClient, { ApiError } from "@/lib/api"
+
+type ApiClientUpload = <T>(endpoint: string, options?: RequestInit) => Promise<T>;
+
+// Helper pour l'upload de fichiers, ne met pas de 'Content-Type'
+const apiClientUpload: ApiClientUpload = async (endpoint, options = {}) => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+  const url = endpoint.startsWith('http') ? endpoint : `${apiUrl}${endpoint}`;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const headers: HeadersInit = { ...options.headers };
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  const response = await fetch(url, { ...options, headers });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ message: 'An unknown error occurred' }));
+    throw new ApiError(errorBody.message, response.status, response.statusText);
+  }
+  return response.json();
+};
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
@@ -28,30 +48,32 @@ export default function ProfilePage() {
   const [secondaryDraft, setSecondaryDraft] = useState<any>({});
   const [addSecondaryOpen, setAddSecondaryOpen] = useState(false);
   const [addSecondaryDraft, setAddSecondaryDraft] = useState<any>({ name: '', distance: '', elevation: '', date: '', timeGoal: '' });
+  const [feedback, setFeedback] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem("token")
-    fetch("/api/profile", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        setProfile(data.profile)
-        setFirstName(data.profile?.firstName || "")
-        setLastName(data.profile?.lastName || "")
-        setAvatar(data.profile?.avatar || "")
-        setLoading(false)
-      })
-  }, [])
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [profileData, prsData] = await Promise.all([
+          apiClient<{profile: any}>('/api/profile'),
+          apiClient('/api/strava/prs')
+        ]);
+        
+        setProfile(profileData.profile);
+        setFirstName(profileData.profile?.firstName || "");
+        setLastName(profileData.profile?.lastName || "");
+        setAvatar(profileData.profile?.avatar || "");
+        setStravaPrs(prsData);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token")
-    fetch("http://localhost:3000/api/strava/prs", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(setStravaPrs)
-  }, [])
+      } catch (error) {
+        console.error("Erreur de chargement du profil ou des PRs", error);
+        setFeedback("Impossible de charger les données du profil.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
   const handleEdit = () => {
     setFirstName(profile?.firstName || "")
@@ -61,64 +83,70 @@ export default function ProfilePage() {
     setEditOpen(true)
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setAvatarFile(e.target.files[0])
       setAvatar(URL.createObjectURL(e.target.files[0]))
     }
   }
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
-    let avatarUrl = avatar
-    if (avatarFile) {
-      const formData = new FormData()
-      formData.append("file", avatarFile)
-      const uploadRes = await fetch("/api/upload-avatar", {
+    setFeedback('')
+    try {
+      let avatarUrl = avatar
+      if (avatarFile) {
+        const formData = new FormData()
+        formData.append("file", avatarFile)
+        const uploadData = await apiClientUpload<{ url: string }>("/api/upload-avatar", {
+          method: "POST",
+          body: formData,
+        })
+        avatarUrl = uploadData.url
+      }
+      
+      const updatedProfile = { ...profile, firstName, lastName, avatar: avatarUrl }
+      await apiClient("/api/save-profile", {
         method: "POST",
-        body: formData,
+        body: JSON.stringify(updatedProfile),
       })
-      const uploadData = await uploadRes.json()
-      avatarUrl = uploadData.url
+
+      setProfile(updatedProfile)
+      setEditOpen(false)
+    } catch (error) {
+        console.error("Erreur lors de la sauvegarde", error)
+        setFeedback("La sauvegarde a échoué. Veuillez réessayer.")
+    } finally {
+        setIsSaving(false)
     }
-    const token = localStorage.getItem("token")
-    await fetch("/api/save-profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...profile, firstName, lastName, avatar: avatarUrl }),
-    })
-    setProfile((p: any) => ({ ...p, firstName, lastName, avatar: avatarUrl }))
-    setEditOpen(false)
-    setIsSaving(false)
   }
 
-  // Sauvegarde du profil après modif/suppression d'objectif
   const saveProfile = async (newProfile: any) => {
-    const token = localStorage.getItem("token");
-    await fetch("/api/save-profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(newProfile),
-    });
-    setProfile(newProfile);
-  };
+    try {
+      await apiClient("/api/save-profile", {
+        method: "POST",
+        body: JSON.stringify(newProfile),
+      })
+      setProfile(newProfile)
+    } catch(e) {
+      console.error("Erreur saveProfile", e)
+      setFeedback("Erreur lors de la mise à jour de l'objectif.")
+    }
+  }
 
-  // Suppression objectif principal
   const handleDeleteGoal = async () => {
-    const newProfile = { ...profile, goalName: "", goalDistance: "", goalElevation: "", goalDate: "", goalPerformance: "" };
-    await saveProfile(newProfile);
-  };
+    const newProfile = { ...profile, goalName: "", goalDistance: "", goalElevation: "", goalDate: "", goalPerformance: "" }
+    await saveProfile(newProfile)
+  }
 
-  // Suppression objectif secondaire
   const handleDeleteSecondary = async (idx: number) => {
-    const newSecondaries = [...(profile.secondaryObjectives || [])];
-    newSecondaries.splice(idx, 1);
-    const newProfile = { ...profile, secondaryObjectives: newSecondaries };
-    await saveProfile(newProfile);
-  };
+    const newSecondaries = [...(profile.secondaryObjectives || [])]
+    newSecondaries.splice(idx, 1)
+    const newProfile = { ...profile, secondaryObjectives: newSecondaries }
+    await saveProfile(newProfile)
+  }
 
-  // Edition objectif principal
   const handleEditGoal = () => {
     setGoalDraft({
       name: profile.goalName || "",
@@ -126,9 +154,10 @@ export default function ProfilePage() {
       elevation: profile.goalElevation || "",
       date: profile.goalDate || "",
       timeGoal: profile.goalPerformance || "",
-    });
-    setEditGoalOpen(true);
-  };
+    })
+    setEditGoalOpen(true)
+  }
+
   const handleSaveGoal = async () => {
     const newProfile = {
       ...profile,
@@ -137,24 +166,35 @@ export default function ProfilePage() {
       goalElevation: goalDraft.elevation,
       goalDate: goalDraft.date,
       goalPerformance: goalDraft.timeGoal,
-    };
-    await saveProfile(newProfile);
-    setEditGoalOpen(false);
-  };
+    }
+    await saveProfile(newProfile)
+    setEditGoalOpen(false)
+  }
 
-  // Edition objectif secondaire
   const handleEditSecondary = (idx: number) => {
-    setSecondaryDraft({ ...(profile.secondaryObjectives?.[idx] || {}) });
-    setEditSecondaryOpen({ open: true, idx });
-  };
+    setSecondaryDraft({ ...(profile.secondaryObjectives?.[idx] || {}) })
+    setEditSecondaryOpen({ open: true, idx })
+  }
+
   const handleSaveSecondary = async () => {
-    if (editSecondaryOpen.idx === null) return;
-    const newSecondaries = [...(profile.secondaryObjectives || [])];
-    newSecondaries[editSecondaryOpen.idx] = secondaryDraft;
-    const newProfile = { ...profile, secondaryObjectives: newSecondaries };
-    await saveProfile(newProfile);
-    setEditSecondaryOpen({ open: false, idx: null });
-  };
+    if (editSecondaryOpen.idx === null) return
+    const newSecondaries = [...(profile.secondaryObjectives || [])]
+    newSecondaries[editSecondaryOpen.idx] = secondaryDraft
+    const newProfile = { ...profile, secondaryObjectives: newSecondaries }
+    await saveProfile(newProfile)
+    setEditSecondaryOpen({ open: false, idx: null })
+  }
+
+  const handleSync = async () => {
+    setFeedback("Synchronisation en cours...")
+    try {
+      const data = await apiClient<{message: string}>("/api/strava/sync")
+      setFeedback(data.message || "Synchronisation terminée !")
+    } catch (error) {
+      console.error("Erreur de synchronisation", error)
+      setFeedback("La synchronisation a échoué.")
+    }
+  }
 
   if (loading) return <div>Chargement...</div>
 
@@ -218,14 +258,7 @@ export default function ProfilePage() {
             </div>
             <Button
               className="mt-4 bg-blue-600 text-white"
-              onClick={async () => {
-                const token = localStorage.getItem("token");
-                const res = await fetch("http://localhost:3000/api/strava/sync", {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = await res.json();
-                alert(data.message || "Synchronisation terminée !");
-              }}
+              onClick={handleSync}
             >
               Synchroniser mes activités Strava
             </Button>
@@ -273,7 +306,6 @@ export default function ProfilePage() {
                   </div>
                 </DialogContent>
               </Dialog>
-              {/* Objectifs secondaires */}
               {profile?.secondaryObjectives && profile.secondaryObjectives.length > 0 ? (
                 profile.secondaryObjectives.map((obj: any, idx: number) => (
                   <div key={idx} className="p-4 bg-green-50 rounded-lg flex justify-between items-center gap-2">
@@ -316,7 +348,7 @@ export default function ProfilePage() {
                       setAddSecondaryOpen(false);
                       setAddSecondaryDraft({ name: '', distance: '', elevation: '', date: '', timeGoal: '' });
                     }} disabled={!addSecondaryDraft.name || !addSecondaryDraft.distance || !addSecondaryDraft.date}>Ajouter</Button>
-              </div>
+                  </div>
                 </DialogContent>
               </Dialog>
             </CardContent>

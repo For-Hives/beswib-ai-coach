@@ -12,12 +12,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Eye, EyeOff, Mail, Lock, User, UserPlus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth/AuthProvider";
+import apiClient, { ApiError } from "@/lib/api"
 
+interface LoginResponse {
+  token: string;
+  user: { _id: string; email: string; };
+}
 
 export function SignupForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [feedback, setFeedback] = useState('');
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -33,23 +39,23 @@ export function SignupForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setFeedback('');
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas")
+      setFeedback("Les mots de passe ne correspondent pas");
       return
     }
 
     if (!formData.acceptTerms) {
-      alert("Veuillez accepter les conditions d'utilisation")
+      setFeedback("Veuillez accepter les conditions d'utilisation");
       return
     }
 
     setIsLoading(true)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/auth/register`, {
+      const data = await apiClient<LoginResponse>("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: formData.email,
           password: formData.password,
@@ -61,22 +67,19 @@ export function SignupForm() {
           preferences: {
             newsletter: formData.newsletter,
           },
-          goals: {}, // tu peux l'ajouter plus tard
+          goals: {},
         }),
       });
     
-      const data = await res.json();
-      console.log('🧾 Réponse backend signup:', data);
-
+      login(data.token, data.user);
     
-      if (!res.ok) throw new Error(data.message || "Erreur à la création du compte");
-    
-      // Ici, si le back renvoie le token + user
-      login(data.token, data.user); // ⬅️ connecte et redirige automatiquement
-    
-      // Sinon, tu peux enchaîner un appel à /login manuellement ici si besoin
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setFeedback(err.message || "Erreur lors de l'inscription");
+      } else {
+        setFeedback("Une erreur inattendue est survenue.");
+      }
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +97,7 @@ export function SignupForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {feedback && <div className="text-red-500 text-center text-sm">{feedback}</div>}
           {/* Nom et Prénom */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -250,7 +254,7 @@ export function SignupForm() {
                 className="mt-1"
               />
               <Label htmlFor="newsletter" className="text-sm text-gray-600 leading-5">
-                Je souhaite recevoir les conseils d'entraînement et actualités par email
+                Recevoir les actualités et conseils par email
               </Label>
             </div>
           </div>

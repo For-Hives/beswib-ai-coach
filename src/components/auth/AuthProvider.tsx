@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import apiClient from '@/lib/api';
 
 type User = {
   _id: string;
@@ -36,39 +37,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (storedToken) {
       setToken(storedToken);
-      setLoading(true); 
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/profile`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${storedToken}`,
-        },
-      })
-        .then(async (res) => {
-          console.log('🔍 Requête /profile status:', res.status);
-          if (!res.ok) throw new Error('Token invalide');
-          const data = await res.json();
-          console.log('👤 Utilisateur récupéré :', data);
+      
+      const verifyToken = async (tokenToVerify: string) => {
+        setLoading(true);
+        try {
+          const data = await apiClient<User>('/api/profile', {
+            // Le token est ajouté par apiClient, mais on pourrait vouloir
+            // forcer l'utilisation de celui-ci spécifiquement.
+            // Pour l'instant, on se fie au localStorage que apiClient va lire.
+          });
+
+          console.log('👤 Utilisateur récupéré via verifyToken:', data);
           setUser(data);
           localStorage.setItem('profile', JSON.stringify({
             email: data.email || '',
-            avatar: data.profile?.avatar || '',
+            avatar: data.profile?.avatar || data.avatar || '',
           }));
-          setLoading(false); 
-        })
-        .catch((err) => {
-          console.warn('⛔ Erreur fetch /profile:', err.message);
+
+        } catch (err) {
+          console.warn('⛔ Token invalide ou expiré:', err);
+          // Nettoyage si le token est invalide
           localStorage.removeItem('token');
           localStorage.removeItem('profile');
           setToken(null);
           setUser(null);
           router.push('/login');
-          setLoading(false); 
-        });
-    }
-  }, []);
+        } finally {
+          setLoading(false);
+        }
+      };
 
-  const login = (newToken: string, userData?: User) => {
+      verifyToken(storedToken);
+    } else {
+      setLoading(false); // Pas de token, on ne charge rien
+    }
+  }, []); // Ne dépend que du montage initial
+
+  const login = async (newToken: string, userData?: User) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
     console.log('✅ Login enregistré avec token:', newToken);
@@ -77,36 +82,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(userData);
       localStorage.setItem('profile', JSON.stringify({
         email: userData.email || '',
-        avatar: (userData as any).avatar || '',
+        avatar: (userData as any).profile?.avatar || (userData as any).avatar || '',
       }));
+      router.push('/dashboard');
     } else {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/profile`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${newToken}`,
-        },
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error('Token invalide');
-          const data = await res.json();
-          setUser(data);
-          localStorage.setItem('profile', JSON.stringify({
+      // Si userData n'est pas fourni, on le fetch
+      try {
+        const data = await apiClient<User>('/api/profile'); // apiClient utilise le token fraîchement stocké
+        setUser(data);
+        localStorage.setItem('profile', JSON.stringify({
             email: data.email || '',
-            avatar: data.profile?.avatar || '',
-          }));
-        })
-        .catch((err) => {
-          console.warn('⛔ Erreur post-login /profile:', err.message);
-          localStorage.removeItem('token');
-          localStorage.removeItem('profile');
-          setToken(null);
-          setUser(null);
-          router.push('/login');
-        });
+            avatar: data.profile?.avatar || data.avatar || '',
+        }));
+        router.push('/dashboard');
+      } catch (err) {
+        console.warn('⛔ Erreur post-login /profile:', err);
+        // En cas d'erreur, on nettoie pour éviter un état incohérent
+        logout();
+      }
     }
-
-    router.push('/dashboard');
   };
 
   const logout = () => {

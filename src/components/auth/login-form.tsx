@@ -1,6 +1,17 @@
 "use client";
 import React, { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider"; 
+import apiClient, { ApiError } from "@/lib/api";
+
+// Définition du type de la réponse de l'API de connexion
+interface LoginResponse {
+  token: string;
+  user: {
+    _id: string;
+    email: string;
+    // ... autres champs utilisateur
+  };
+}
 
 export function LoginForm() {
   const { login } = useAuth();
@@ -15,22 +26,21 @@ export function LoginForm() {
     setMessage("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+      const data = await apiClient<LoginResponse>("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+      
+      login(data.token, data.user); 
+      setMessage("Connexion réussie !");
 
-      const data = await res.json();
-
-      if (res.ok) {
-        login(data.token, data.user); 
-        setMessage("Connexion réussie !");
-      } else {
-        setMessage(data.message || "Erreur lors de la connexion");
-      }
     } catch (err) {
-      setMessage("Erreur serveur");
+      if (err instanceof ApiError) {
+        setMessage(err.message || "Erreur lors de la connexion");
+      } else {
+        setMessage("Une erreur de connexion inattendue est survenue.");
+      }
+      console.error(err);
     } finally {
       setLoading(false);
     }

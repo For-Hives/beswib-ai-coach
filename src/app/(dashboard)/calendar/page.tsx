@@ -4,7 +4,7 @@ import { TrainingCalendar, TrainingSession } from "@/components/calendar/trainin
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import apiClient, { ApiError } from "@/lib/api";
 
 function stravaToSession(act: any): TrainingSession {
   let type = "Endurance";
@@ -41,80 +41,66 @@ export default function CalendarPage() {
   const [addIndispoOpen, setAddIndispoOpen] = useState(false);
   const [indispoDraft, setIndispoDraft] = useState<{ date: string; reason: string }>({ date: '', reason: '' });
   const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('Début useEffect /calendar');
-    const token = localStorage.getItem("token");
-    console.log('Token:', token);
-    fetch("/api/strava/activities", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => { console.log('Réponse /api/strava/activities:', r); return r.json(); })
-      .then((stravaActs) => {
-        console.log('Data /api/strava/activities:', stravaActs);
+    const fetchInitialData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [stravaActs, summaryData, profileData] = await Promise.all([
+          apiClient<any[]>("/api/strava/activities"),
+          apiClient<any>("/api/strava/summary"),
+          apiClient<{ profile: any }>("/api/profile")
+        ]);
+
         const stravaSessions = (stravaActs || []).map(stravaToSession);
         setSessions(stravaSessions);
-      });
-    fetch("/api/strava/summary", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => { console.log('Réponse /api/strava/summary:', r); return r.json(); })
-      .then(data => { console.log('Data /api/strava/summary:', data); setSummary(data); });
-    fetch("/api/profile", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => { console.log('Réponse /api/profile:', res); return res.json(); })
-      .then(data => {
-        console.log('Data /api/profile:', data);
-        const profile = data.profile || {};
-        setProfile(profile);
-        setUnavailabilities(profile.unavailabilities || []);
+        setSummary(summaryData);
+        
+        const currentProfile = profileData.profile || {};
+        setProfile(currentProfile);
+        setUnavailabilities(currentProfile.unavailabilities || []);
+        
         const events: TrainingSession[] = [];
-        if (profile.goalDate && profile.goalName) {
-          events.push({
-            id: "goal",
-            date: profile.goalDate.slice(0, 10),
-            type: "Objectif",
-            name: profile.goalName,
-            distance: profile.goalDistance ? String(profile.goalDistance) : undefined,
-            elevation: profile.goalElevation ? String(profile.goalElevation) : undefined,
-            timeGoal: profile.goalPerformance || undefined,
-            description: "Objectif principal",
-            isGoal: true,
-          } as any);
+        if (currentProfile.goalDate && currentProfile.goalName) {
+          events.push({ id: "goal", date: currentProfile.goalDate.slice(0, 10), type: "Objectif", name: currentProfile.goalName, isGoal: true } as any);
         }
-        if (Array.isArray(profile.secondaryObjectives)) {
-          profile.secondaryObjectives.forEach((obj: any, idx: number) => {
+        if (Array.isArray(currentProfile.secondaryObjectives)) {
+          currentProfile.secondaryObjectives.forEach((obj: any, idx: number) => {
             if (obj.date && obj.name) {
-              events.push({
-                id: `secondary-goal-${idx}`,
-                date: obj.date.slice(0, 10),
-                type: "Objectif",
-                name: obj.name,
-                distance: obj.distance ? String(obj.distance) : undefined,
-                elevation: obj.elevation ? String(obj.elevation) : undefined,
-                timeGoal: obj.timeGoal || undefined,
-                description: "Objectif secondaire",
-                isGoal: true,
-              } as any);
+              events.push({ id: `secondary-goal-${idx}`, date: obj.date.slice(0, 10), type: "Objectif", name: obj.name, isGoal: true } as any);
             }
           });
         }
         setGoalEvents(events);
-      });
+
+      } catch (err) {
+        console.error("Erreur de chargement des données du calendrier", err);
+        setError("Impossible de charger les données. Veuillez réessayer.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchInitialData();
   }, []);
 
-  // Ajout/suppression d'indisponibilité
   const saveUnavailabilities = async (newUnav: { date: string; reason?: string }[]) => {
     if (!profile) return;
-    const token = localStorage.getItem("token");
-    await fetch("/api/save-profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...profile, unavailabilities: newUnav }),
-    });
-    setUnavailabilities(newUnav);
-    setProfile((p: any) => ({ ...p, unavailabilities: newUnav }));
+    try {
+      const updatedProfile = { ...profile, unavailabilities: newUnav };
+      await apiClient("/api/save-profile", {
+        method: "POST",
+        body: JSON.stringify(updatedProfile),
+      });
+      setUnavailabilities(newUnav);
+      setProfile(updatedProfile); // Met à jour le profil local pour rester synchronisé
+    } catch(err) {
+      console.error("Erreur lors de la sauvegarde de l'indisponibilité", err);
+      // Idéalement, afficher un feedback à l'utilisateur ici
+    }
   };
 
   const handleAddIndispo = async () => {
@@ -139,7 +125,8 @@ export default function CalendarPage() {
     isIndispo: true,
   } as any));
 
-  console.log('Rendu /calendar', { sessions, summary, goalEvents, unavailabilities, profile });
+  if (loading) return <div>Chargement...</div>
+  if (error) return <div className="text-red-500">{error}</div>
 
   return (
     <div className="space-y-6">

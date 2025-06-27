@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import apiClient, { ApiError } from "@/lib/api";
 
 export default function ProfileSettingsPage() {
   const pathname = usePathname();
@@ -30,88 +31,58 @@ export default function ProfileSettingsPage() {
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    console.log("USEEFFECT SETTINGS MOUNTED");
     const fetchProfile = async () => {
-      const token = localStorage.getItem("token");
-      console.log("TOKEN:", token);
-      const res = await fetch("/api/profile", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      console.log("RESPONSE STATUS:", res.status);
-      if (res.ok) {
-        const data = await res.json();
-        console.log("DATA PROFILE SETTINGS:", data);
+      try {
+        const data = await apiClient<{ email: string; twofaEnabled: boolean; preferences: any }>('/api/profile');
         setEmail(data.email || "");
         setTwoFA(!!data.twofaEnabled);
         setNotifications(!!data.preferences?.notifications);
         setNewsletter(!!data.preferences?.newsletter);
-      } else {
-        console.log("ERREUR FETCH PROFILE", await res.text());
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setFeedback(`Erreur: ${error.message}`);
+        } else {
+          setFeedback("Une erreur inattendue est survenue.");
+        }
+        console.error("Erreur fetch profile", error);
       }
     };
     fetchProfile();
   }, []);
 
-  // Helper pour fetch protégé
-  const fetchAuth = async (url: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem("token");
-    return fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...((options.headers as any) || {}),
-      },
-    });
-  };
-
   // Handlers
   const handleEmailChange = () => { setShowEmailModal(true); setNewEmail(""); setFeedback(""); };
   const handlePasswordChange = () => { setShowPasswordModal(true); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setFeedback(""); };
-  const handle2FAChange = async () => {
+  
+  const handleToggleSetting = async (endpoint: string, state: boolean, setState: (value: boolean) => void, settingName: string) => {
     setLoading(true);
     setFeedback("");
     try {
-      const res = await fetchAuth("/api/users/2fa", { method: "POST", body: JSON.stringify({ enabled: !twoFA }) });
-      if (!res.ok) throw new Error(await res.text());
-      setTwoFA(!twoFA);
-      setFeedback("2FA mise à jour");
-    } catch (e) { setFeedback("Erreur 2FA"); }
+      await apiClient(endpoint, { method: "POST", body: JSON.stringify({ enabled: !state }) });
+      setState(!state);
+      setFeedback(`${settingName} mis à jour`);
+    } catch (e) {
+      setFeedback(`Erreur ${settingName}`);
+    }
     setLoading(false);
   };
-  const handleNotificationsChange = async () => {
-    setLoading(true);
-    setFeedback("");
-    try {
-      const res = await fetchAuth("/api/users/notifications", { method: "POST", body: JSON.stringify({ enabled: !notifications }) });
-      if (!res.ok) throw new Error(await res.text());
-      setNotifications(!notifications);
-      setFeedback("Notifications mises à jour");
-    } catch (e) { setFeedback("Erreur notifications"); }
-    setLoading(false);
-  };
-  const handleNewsletterChange = async () => {
-    setLoading(true);
-    setFeedback("");
-    try {
-      const res = await fetchAuth("/api/users/newsletter", { method: "POST", body: JSON.stringify({ enabled: !newsletter }) });
-      if (!res.ok) throw new Error(await res.text());
-      setNewsletter(!newsletter);
-      setFeedback("Newsletter mise à jour");
-    } catch (e) { setFeedback("Erreur newsletter"); }
-    setLoading(false);
-  };
+  
+  const handle2FAChange = () => handleToggleSetting("/api/users/2fa", twoFA, setTwoFA, "2FA");
+  const handleNotificationsChange = () => handleToggleSetting("/api/users/notifications", notifications, setNotifications, "Notifications");
+  const handleNewsletterChange = () => handleToggleSetting("/api/users/newsletter", newsletter, setNewsletter, "Newsletter");
+
   const handleSupportAccessChange = () => { setSupportAccess(!supportAccess); };
+  
   const handleLogoutAll = async () => {
     setLoading(true);
     setFeedback("");
     try {
-      const res = await fetchAuth("/api/users/logout-all", { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
+      await apiClient("/api/users/logout-all", { method: "POST" });
       setFeedback("Déconnecté de tous les appareils");
     } catch (e) { setFeedback("Erreur déconnexion"); }
     setLoading(false);
   };
+  
   const handleDeleteAccount = () => { setShowDeleteModal(true); setFeedback(""); };
 
   // Modals actions
@@ -119,8 +90,7 @@ export default function ProfileSettingsPage() {
     setLoading(true);
     setFeedback("");
     try {
-      const res = await fetchAuth("/api/users/change-email", { method: "POST", body: JSON.stringify({ email: newEmail }) });
-      if (!res.ok) throw new Error(await res.text());
+      await apiClient("/api/users/change-email", { method: "POST", body: JSON.stringify({ email: newEmail }) });
       setEmail(newEmail);
       setShowEmailModal(false);
       setFeedback("Email modifié");
@@ -132,8 +102,7 @@ export default function ProfileSettingsPage() {
     setFeedback("");
     if (newPassword !== confirmPassword) { setFeedback("Les mots de passe ne correspondent pas"); setLoading(false); return; }
     try {
-      const res = await fetchAuth("/api/users/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
-      if (!res.ok) throw new Error(await res.text());
+      await apiClient("/api/users/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
       setShowPasswordModal(false);
       setFeedback("Mot de passe modifié");
     } catch (e) { setFeedback("Erreur mot de passe"); }
@@ -143,8 +112,7 @@ export default function ProfileSettingsPage() {
     setLoading(true);
     setFeedback("");
     try {
-      const res = await fetchAuth("/api/users/delete-account", { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      await apiClient("/api/users/delete-account", { method: "DELETE" });
       setShowDeleteModal(false);
       setFeedback("Compte supprimé");
       localStorage.removeItem("token");

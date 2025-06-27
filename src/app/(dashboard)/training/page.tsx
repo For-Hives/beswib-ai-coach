@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrainingCalendar, TrainingSession } from "@/components/calendar/training-calendar";
 import { useRouter } from "next/navigation";
 import { BarChart, Heart, Target, Wind } from "lucide-react";
+import apiClient, { ApiError } from "@/lib/api";
 
 interface BlockSummary {
   title: string;
@@ -45,33 +46,20 @@ export default function TrainingPlanPage() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const router = useRouter();
 
-  const fetchTrainingPlan = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
+  const fetchInitialData = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/training-plan", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const [planData, profileData] = await Promise.all([
+        apiClient<any>('/api/training-plan'),
+        apiClient<{ profile: any }>('/api/profile')
+      ]);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || 'Erreur inconnue du serveur');
+      // Traitement du plan
+      if (!planData || typeof planData !== 'object') {
+        throw new Error("Format de réponse du plan invalide.");
       }
-
-      const data = await res.json();
-      if (!data || typeof data !== 'object') {
-        throw new Error("Format de réponse invalide.");
-      }
-
-      const aiResult = data;
-      const mappedPlan = (aiResult.trainingPlan || []).map((session: any, index: number) => ({
+      const mappedPlan = (planData.trainingPlan || []).map((session: any, index: number) => ({
         id: index,
         date: session.date,
         type: session.sessionType,
@@ -83,16 +71,33 @@ export default function TrainingPlanPage() {
         rpe: session.rpe,
         intensity: session.intensity,
       }));
-
-      setBlockSummary(aiResult.blockSummary || null);
+      setBlockSummary(planData.blockSummary || null);
       setPlan(mappedPlan);
-      setBlockRecap(aiResult.blockRecap || null);
-      setExtraAdvice(aiResult.extraAdvice || null);
-      setMotivationalQuote(aiResult.motivationalQuote || null);
-      setError(null);
+      setBlockRecap(planData.blockRecap || null);
+      setExtraAdvice(planData.extraAdvice || null);
+      setMotivationalQuote(planData.motivationalQuote || null);
+
+      // Traitement du profil
+      const profile = profileData.profile || {};
+      const events: TrainingSession[] = [];
+      if (profile.goalDate && profile.goalName) {
+        events.push({ id: "goal", date: profile.goalDate.slice(0, 10), type: "Objectif", name: profile.goalName, isGoal: true } as any);
+      }
+      if (Array.isArray(profile.secondaryObjectives)) {
+        profile.secondaryObjectives.forEach((obj: any, idx: number) => {
+          if (obj.date && obj.name) {
+            events.push({ id: `secondary-goal-${idx}`, date: obj.date.slice(0, 10), type: "Objectif", name: obj.name, isGoal: true } as any);
+          }
+        });
+      }
+      setGoalEvents(events);
+      const indispos: TrainingSession[] = (profile.unavailabilities || []).map((u: any, idx: number) => ({
+        id: `indispo-${idx}`, date: u.date, type: "Indisponibilité", description: u.reason || "Indisponible", isIndispo: true,
+      } as any));
+      setIndispoEvents(indispos);
 
     } catch (err: any) {
-      setError("Erreur : " + (err.message || "impossible de générer le plan. Vérifiez que votre profil est complet."));
+      setError("Erreur : " + (err.message || "impossible de charger les données. Vérifiez que votre profil est complet."));
       setPlan([]);
     } finally {
       setLoading(false);
@@ -101,80 +106,22 @@ export default function TrainingPlanPage() {
   };
 
   useEffect(() => {
-    fetchTrainingPlan();
-  }, []); // Exécuté une seule fois au montage
-
-  // Ajout : récupération des objectifs du profil
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch("/api/profile", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        const profile = data.profile || {};
-        const events: TrainingSession[] = [];
-        // Objectif principal
-        if (profile.goalDate && profile.goalName) {
-          events.push({
-            id: "goal",
-            date: profile.goalDate.slice(0, 10),
-            type: "Objectif",
-            name: profile.goalName,
-            distance: profile.goalDistance ? String(profile.goalDistance) : undefined,
-            elevation: profile.goalElevation ? String(profile.goalElevation) : undefined,
-            timeGoal: profile.goalPerformance || undefined,
-            description: "Objectif principal",
-            isGoal: true,
-          } as any);
-        }
-        // Objectifs secondaires
-        if (Array.isArray(profile.secondaryObjectives)) {
-          profile.secondaryObjectives.forEach((obj: any, idx: number) => {
-            if (obj.date && obj.name) {
-              events.push({
-                id: `secondary-goal-${idx}`,
-                date: obj.date.slice(0, 10),
-                type: "Objectif",
-                name: obj.name,
-                distance: obj.distance ? String(obj.distance) : undefined,
-                elevation: obj.elevation ? String(obj.elevation) : undefined,
-                timeGoal: obj.timeGoal || undefined,
-                description: "Objectif secondaire",
-                isGoal: true,
-              } as any);
-            }
-          });
-        }
-        setGoalEvents(events);
-        // Indisponibilités
-        const indispos: TrainingSession[] = (profile.unavailabilities || []).map((u: any, idx: number) => ({
-          id: `indispo-${idx}`,
-          date: u.date,
-          type: "Indisponibilité",
-          distance: "",
-          duration: "",
-          description: u.reason || "Indisponible",
-          isIndispo: true,
-        } as any));
-        setIndispoEvents(indispos);
-      });
+    fetchInitialData();
   }, []);
 
   const handleRegenerate = async () => {
     setIsRegenerating(true);
     setError(null);
-    const token = localStorage.getItem("token");
     try {
-      await fetch("/api/training-plan/regenerate", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // Après avoir vidé le plan côté serveur, on relance le fetch
-      await fetchTrainingPlan();
+      await apiClient("/api/training-plan/regenerate", { method: "POST" });
+      await fetchInitialData(); // On recharge toutes les données
     } catch (error) {
       console.error("Failed to regenerate plan:", error);
-      setError("La regénération du plan a échoué.");
+      if (error instanceof ApiError) {
+        setError(error.message);
+      } else {
+        setError("La regénération du plan a échoué.");
+      }
       setIsRegenerating(false);
     }
   };
