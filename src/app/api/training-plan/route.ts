@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 import User from "../../../models/User";
 import { google } from "@ai-sdk/google";
 import { generateText } from "ai";
-// @ts-ignore
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 

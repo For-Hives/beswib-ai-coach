@@ -2,9 +2,10 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrainingCalendar, TrainingSession } from "@/components/calendar/training-calendar";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart, Heart, Target, Wind } from "lucide-react";
 import apiClient, { ApiError } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface BlockSummary {
   title: string;
@@ -44,7 +45,9 @@ export default function TrainingPlanPage() {
   const [goalEvents, setGoalEvents] = useState<TrainingSession[]>([]);
   const [indispoEvents, setIndispoEvents] = useState<TrainingSession[]>([]);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<TrainingSession | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -108,6 +111,22 @@ export default function TrainingPlanPage() {
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  useEffect(() => {
+    const sessionId = searchParams.get('sessionId');
+    if (sessionId && plan.length > 0) {
+      const session = plan.find(s => String(s.id) === sessionId);
+      if (session) {
+        setSelectedSession(session);
+        // Clean the URL
+        router.replace('/training', { scroll: false });
+      }
+    }
+  }, [plan, searchParams, router]);
+
+  const handleEventClick = (session: TrainingSession) => {
+    setSelectedSession(session);
+  }
 
   const handleRegenerate = async () => {
     setIsRegenerating(true);
@@ -208,10 +227,56 @@ export default function TrainingPlanPage() {
           ) : plan.length === 0 && goalEvents.length === 0 ? (
             <p>Aucune séance trouvée. Pensez à compléter votre profil.</p>
           ) : (
-            <TrainingCalendar sessions={[...plan, ...goalEvents, ...indispoEvents]} />
+            <TrainingCalendar 
+              sessions={[...plan, ...goalEvents, ...indispoEvents]} 
+              onEventClick={handleEventClick}
+            />
           )}
         </CardContent>
       </Card>
+
+      {selectedSession && (
+        <Dialog open={!!selectedSession} onOpenChange={(isOpen) => !isOpen && setSelectedSession(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{selectedSession.name || selectedSession.type}</DialogTitle>
+              <div className="text-sm text-gray-500 pt-1">
+                {new Date(selectedSession.date).toLocaleDateString("fr-FR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </div>
+            </DialogHeader>
+            <div className="mt-4 space-y-4">
+              <div>
+                <h4 className="font-semibold text-gray-800">Description</h4>
+                <p className="text-gray-600">{selectedSession.description}</p>
+              </div>
+              {selectedSession.details && (
+                <div>
+                  <h4 className="font-semibold text-gray-800">Détails de la séance</h4>
+                  <p className="text-gray-600 whitespace-pre-wrap">{selectedSession.details}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div>
+                  <h4 className="font-semibold text-gray-800">Distance</h4>
+                  <p className="text-gray-600">{selectedSession.distance || '-'}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-800">Durée</h4>
+                  <p className="text-gray-600">{selectedSession.duration || '-'}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-800">Intensité (RPE)</h4>
+                  <p className="text-gray-600">{selectedSession.rpe ? `${selectedSession.rpe}/10` : '-'}</p>
+                </div>
+                  <div>
+                  <h4 className="font-semibold text-gray-800">Type</h4>
+                  <p className="text-gray-600">{selectedSession.type}</p>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {blockRecap && (
          <Card>

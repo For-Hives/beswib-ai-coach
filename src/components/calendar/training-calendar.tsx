@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ChevronLeft, ChevronRight, CalendarIcon } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 export interface TrainingSession {
   id: number;
@@ -22,6 +21,7 @@ export interface TrainingSession {
   elevation?: number;
   timeGoal?: string;
   isIndispo?: boolean;
+  isGoal?: boolean;
   intensity?: number;
   rpe?: number;
 }
@@ -29,6 +29,7 @@ export interface TrainingSession {
 interface TrainingCalendarProps {
   sessions?: TrainingSession[];
   onDeleteIndispo?: (date: string) => void;
+  onEventClick?: (session: TrainingSession) => void;
 }
 
 const getSessionColor = (type: string) => {
@@ -111,9 +112,14 @@ function getCourseInfo(session: any) {
   return null;
 }
 
-export function TrainingCalendar({ sessions = [], onDeleteIndispo }: TrainingCalendarProps) {
+export function TrainingCalendar({ sessions = [], onDeleteIndispo, onEventClick }: TrainingCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedSession, setSelectedSession] = useState<any>(null)
+
+  const handleSessionClick = (session: TrainingSession) => {
+    if (onEventClick) {
+      onEventClick(session);
+    }
+  };
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
@@ -142,12 +148,14 @@ export function TrainingCalendar({ sessions = [], onDeleteIndispo }: TrainingCal
   const getSessionsForDate = (date: Date) => {
     return sessions.filter((session) => {
       const sessionDate = parseLocalDate(session.date);
-      // Affiche toujours les indispos
-      if ((session as any).isIndispo || session.type === "Indisponibilité") return (
-        sessionDate.getFullYear() === date.getFullYear() &&
-        sessionDate.getMonth() === date.getMonth() &&
-        sessionDate.getDate() === date.getDate()
-      );
+      // Affiche toujours les indispos et les objectifs
+      if ((session as any).isIndispo || session.type === "Indisponibilité" || (session as any).isGoal || session.type === "Objectif") {
+        return (
+          sessionDate.getFullYear() === date.getFullYear() &&
+          sessionDate.getMonth() === date.getMonth() &&
+          sessionDate.getDate() === date.getDate()
+        );
+      }
       if (!session.distance && detectSessionType(session) !== "Renforcement musculaire") return false;
       return (
         sessionDate.getFullYear() === date.getFullYear() &&
@@ -242,103 +250,18 @@ export function TrainingCalendar({ sessions = [], onDeleteIndispo }: TrainingCal
                         </div>
                       );
                     }
+                    if (!isGoal && detectSessionType(session) === "Renforcement musculaire" && !session.description) return null;
                     return (
-                      <Dialog key={key}>
-                        <DialogTrigger asChild>
-                          <div
-                            className={`text-xs p-1 rounded cursor-pointer border ${isGoal ? "bg-purple-100 text-purple-900 border-purple-300 font-bold" : getSessionColor(sessionType)} ${session.completed ? "opacity-75" : ""}`}
-                            onClick={() => setSelectedSession(session)}
-                          >
-                            {isGoal ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-600 text-white rounded-full text-xs font-bold">
-                                Course
-                                {s.name && <span className="ml-1 font-normal">{s.name}</span>}
-                              </span>
-                            ) : (
-                              sessionType
-                            )}
-                            {session.completed && " ✓"}
-                          </div>
-                        </DialogTrigger>
-                        <DialogContent aria-describedby={descId}>
-                          <DialogHeader>
-                            <DialogTitle>{isGoal ? "Détail de l'objectif" : "Détails de la séance"}</DialogTitle>
-                          </DialogHeader>
-                          <p id={descId} className="sr-only">
-                            {isGoal ? "Détail complet de l'objectif (course), incluant nom, date, distance, dénivelé, temps cible et description." : "Détail complet de la séance d'entraînement sélectionnée, incluant type, date, distance, durée et description."}
+                      <button key={key} onClick={() => handleSessionClick(session)} className="w-full text-left">
+                        <div
+                          className={`text-xs p-1 rounded cursor-pointer border ${isGoal ? "bg-purple-100 text-purple-900 border-purple-300 font-bold" : getSessionColor(sessionType)} ${session.completed ? "opacity-75" : ""}`}
+                        >
+                          <p className="font-medium truncate" id={descId}>
+                            {isGoal ? (session.name || "Objectif") : `${sessionType}${session.name ? `: ${session.name}` : ''}`}
                           </p>
-                          <div className="space-y-4">
-                            {isGoal ? (
-                              <div className="p-3 bg-purple-50 rounded-lg">
-                                <div className="font-bold text-purple-800 text-lg mb-1">{s.name || "Course"}</div>
-                                <div className="text-sm text-purple-700">
-                                  {s.distance && <span>Distance : <b>{s.distance}</b> km<br/></span>}
-                                  {s.elevation && <span>Dénivelé : <b>{s.elevation}</b> m<br/></span>}
-                                  {s.timeGoal && <span>Objectif temps : <b>{s.timeGoal}</b><br/></span>}
-                                  {s.date && <span>Date : <b>{new Date(s.date).toLocaleDateString('fr-FR')}</b></span>}
-                                </div>
-                                {s.description && <div className="mt-2 text-purple-900 text-sm">{s.description}</div>}
-                              </div>
-                            ) : (
-                              <>
-                                <div className="flex items-center gap-2">
-                                  <Badge className={getSessionColor(sessionType)}>{sessionType}</Badge>
-                                  <span className="text-sm text-gray-600">
-                                    {new Date(session.date).toLocaleDateString("fr-FR")}
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                  {(session.distance || session.duration) ? (
-                                    <>
-                                      <div>
-                                        <p className="text-sm font-medium">Distance</p>
-                                        <p className="text-lg">{session.distance || "-"}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-sm font-medium">Durée</p>
-                                        <p className="text-lg">{session.duration || "-"}</p>
-                                      </div>
-                                    </>
-                                  ) : null}
-                                  {(session.average_speed || session.average_heartrate) && (
-                                    <>
-                                      {session.average_speed && (
-                                        <div>
-                                          <p className="text-sm font-medium">Allure moyenne</p>
-                                          <p className="text-lg">{convertSpeedToPace(session.average_speed)}</p>
-                                        </div>
-                                      )}
-                                      {session.average_heartrate && (
-                                        <div>
-                                          <p className="text-sm font-medium">FC Moyenne</p>
-                                          <p className="text-lg">{session.average_heartrate} bpm</p>
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                                {(session.details || session.description) && (
-                                  <div className="mt-2">
-                                    <p className="text-sm font-medium">Description</p>
-                                    <p className="text-gray-700">{session.details || session.description}</p>
-                                  </div>
-                                )}
-                                {session.completed ? (
-                                  <div className="p-3 bg-green-50 rounded-lg">
-                                    <p className="text-green-800 font-medium">✓ Séance terminée</p>
-                                    <p className="text-sm text-green-600">Bonne performance ! Continuez ainsi.</p>
-                                  </div>
-                                ) : (
-                                  <div className="p-3 bg-blue-50 rounded-lg">
-                                    <p className="text-blue-800 font-medium">📅 Séance programmée</p>
-                                    <p className="text-sm text-blue-600">N'oubliez pas votre séance d'entraînement.</p>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                          {session.completed && <span className="text-green-600 font-bold">✓</span>}
+                        </div>
+                      </button>
                     );
                   })}
                 </div>
