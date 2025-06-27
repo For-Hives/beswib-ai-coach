@@ -1,3 +1,4 @@
+"use client";
 import { NextSessionCard } from "@/components/dashboard/next-session-card"
 import { ProgressChart } from "@/components/dashboard/progress-chart"
 import KeyMetrics from "@/components/dashboard/key-metrics"
