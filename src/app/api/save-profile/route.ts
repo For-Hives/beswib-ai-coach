@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
-import User from "@/models/User";
+import User from "../../../models/User";
 import jwt from "jsonwebtoken";
 
 console.log("MONGODB_URI used:", process.env.MONGODB_URI);
@@ -28,10 +28,10 @@ export async function POST(req: Request) {
 
   const data = await req.json();
 
-  // On met à jour le champ "profile" du User et on vide le plan
+  // On met à jour le champ "profile" du User et on vide planData pour forcer la regénération
   await User.findOneAndUpdate(
     { email },
-    { $set: { profile: { ...data }, trainingPlan: [] } },
+    { $set: { profile: { ...data }, planData: {} } },
     { upsert: true, new: true }
   );
 

@@ -3,26 +3,30 @@
 import * as React from "react"
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Menu, X, Bell } from "lucide-react"
+import { Menu, X, Bell, User, Settings, CreditCard, LogOut } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useRouter } from "next/navigation"
+import { useAuth } from "../auth/AuthProvider"
 
 const Navbar1 = () => {
   const [isOpen, setIsOpen] = useState(false)
+  const router = useRouter()
+  const { user, logout } = useAuth()
 
-  // Récupération de l'email et de l'avatar (mock ou localStorage)
-  let email = "";
-  let avatar = "";
-  if (typeof window !== "undefined") {
-    try {
-      // Essayons de récupérer depuis localStorage (clé 'profile' ou 'user')
-      const userStr = localStorage.getItem("profile") || localStorage.getItem("user");
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        email = user.email || "";
-        avatar = user.avatar || "";
-      }
-    } catch {}
-  }
-  const initial = email ? email[0].toUpperCase() : "?";
+  // Récupération de l'email et de l'avatar depuis le contexte d'authentification
+  const email = user?.email || ""
+  const avatar = user?.profile?.avatar || user?.avatar || ""
+  const initial = email ? email[0].toUpperCase() : "?"
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
 
   const toggleMenu = () => setIsOpen(!isOpen)
 
@@ -76,13 +80,40 @@ const Navbar1 = () => {
           <button className="relative p-2 rounded-full hover:bg-gray-100 transition">
             <Bell className="w-5 h-5 text-gray-900" />
           </button>
-          {avatar ? (
-            <img src={avatar} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold text-base">
-              <span>{initial}</span>
-            </div>
-          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger>
+              {avatar ? (
+                <img src={avatar} alt="avatar" className="w-8 h-8 rounded-full object-cover cursor-pointer" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold text-base cursor-pointer">
+                  <span>{initial}</span>
+                </div>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end">
+              <div className="px-4 py-2 text-sm text-gray-500">Mon Compte</div>
+              <div className="border-t border-gray-100 my-1" />
+              <DropdownMenuItem onClick={() => router.push('/profile')}>
+                <User className="mr-2 h-4 w-4" />
+                <span>Profil</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/profile/card')}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                <span>Card</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/profile/settings')}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Paramètres</span>
+              </DropdownMenuItem>
+              <div className="border-t border-gray-100 my-1" />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Déconnexion</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
         </motion.div>
         {/* Mobile Menu Button */}
         <motion.button className="md:hidden flex items-center" onClick={toggleMenu} whileTap={{ scale: 0.9 }}>

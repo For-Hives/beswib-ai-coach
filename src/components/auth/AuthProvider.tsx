@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 type User = {
   _id: string;
   email: string;
+  avatar?: string;
+  profile?: {
+    avatar?: string;
+  };
   // ajoute ici d'autres champs selon ton modèle
 };
 

@@ -36,7 +36,7 @@ export default function KeyMetrics() {
         if (!r.ok) throw new Error(`Erreur API profile: ${r.status}`);
         return r.json();
       })
-      .then(setGoal)
+      .then(data => setGoal(data.profile))
       .catch(e => console.error(e));
 
     // Récupère le volume du mois précédent
@@ -72,15 +72,11 @@ export default function KeyMetrics() {
   const percentSessions = nSessionsPlanned ? Math.round((nSessions / nSessionsPlanned) * 100) : 0;
   const progression = prevMonth ? Math.round(((summary?.month?.distance - prevMonth) / prevMonth) * 100) : 0;
 
-  // Correction du calcul des semaines restantes
-  // On privilégie la date de la dernière séance du plan si dispo
-  let objectifDate = null;
-  if (trainingPlan.length > 0) {
-    objectifDate = trainingPlan[trainingPlan.length - 1].date;
-  } else {
-    objectifDate = goal?.runningGoalDate || goal?.trailRaceDate || goal?.cyclingGoalDate || goal?.triathlonDate;
-  }
-  function getWeeksLeft(dateStr: string) {
+  // Calcul des semaines restantes et récupération du nom de l'objectif
+  const goalName = goal?.goalName || "Non défini";
+  const objectifDate = goal?.goalDate;
+
+  function getWeeksLeft(dateStr: string | undefined) {
     if (!dateStr) return "-";
     const now = new Date();
     const target = new Date(dateStr);
@@ -124,7 +120,7 @@ export default function KeyMetrics() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Target className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-medium">Objectif Marathon</span>
+              <span className="text-sm font-medium">Objectif Principal: {goalName}</span>
             </div>
             <span className="text-2xl font-bold text-purple-600">{percentGoal}%</span>
           </div>

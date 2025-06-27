@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
-import User from "@/models/User";
+import User from "../../../models/User";
 import { google } from "@ai-sdk/google";
 import { generateText } from "ai";
 // @ts-ignore
 import jwt from "jsonwebtoken";
+import { z } from "zod";
 
 if (!mongoose.connection.readyState) {
   await mongoose.connect(process.env.MONGODB_URI!);
 }
 
+// Fonction pour calculer le nombre de semaines jusqu'à une date
+const weeksUntil = (dateStr: string) => {
+  const goalDate = new Date(dateStr);
+  const today = new Date();
+  const diffTime = Math.abs(goalDate.getTime() - today.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.ceil(diffDays / 7);
+};
+
 export async function GET(req: Request) {
-  // Récupère le JWT du header Authorization
   const authHeader = req.headers.get("authorization");
   if (!authHeader) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,7 +29,7 @@ export async function GET(req: Request) {
   let email;
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!);
-    if (typeof decoded === 'string' || !('email' in decoded)) {
+    if (typeof decoded === "string" || !("email" in decoded)) {
       return NextResponse.json({ error: "Invalid token payload" }, { status: 401 });
     }
     email = decoded.email;
@@ -28,166 +37,171 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  // Récupère le profil utilisateur
   const user = await User.findOne({ email });
   if (!user || !user.profile) {
     return NextResponse.json({ error: "Profile not found" }, { status: 404 });
   }
+  
+  // Si un plan existe déjà et a été généré récemment, le retourner.
+  if (user.planData && Object.keys(user.planData).length > 0) {
+     console.log("Plan existant trouvé, renvoi du plan en cache.");
+     return NextResponse.json(user.planData);
+  }
+
   const userProfile = user.profile;
-
-  // Utilise la date d'aujourd'hui du profil si présente, sinon la date système
   const todayStr = userProfile.today || new Date().toISOString().split("T")[0];
-  const today = new Date(todayStr);
 
-  // Log profil utilisateur
-  console.log('Profil utilisateur utilisé pour le prompt :', userProfile);
+  // Construction du prompt structuré
+  const promptData = {
+    context: {
+      discipline: userProfile.discipline || "Non spécifié",
+      generationDate: todayStr,
+      stravaDataConnected: !!user.strava,
+      weeksToGoal: userProfile.goalDate ? weeksUntil(userProfile.goalDate) : 0,
+    },
+    athleteProfile: {
+      personal: {
+        age: userProfile.age || "",
+        gender: userProfile.gender || "",
+        height_cm: userProfile.height || "",
+        weight_kg: userProfile.weight || "",
+      },
+      physiological: {
+        maxHeartRate: userProfile.maxHeartRate || "",
+        restingHeartRate: userProfile.restingHeartRate || "",
+        vma_kmh_or_ftp_w: userProfile.vmaOrFtp || "",
+        lastTestDate: userProfile.lastTestDate || "",
+      },
+      performanceHistory: {
+        experienceLevel: userProfile.runningExperience || userProfile.trailExperience || userProfile.cyclingExperience || "Non spécifié",
+        record10k: userProfile.record10k || "",
+        maxEffortDuration_min: userProfile.maxEffortDuration || "",
+        recentBestPerformance: userProfile.runningRecentRace || "",
+      },
+    },
+    mainGoal: {
+      name: userProfile.goalName || "",
+      type: userProfile.goalType || "",
+      distance_km: userProfile.goalDistance || "",
+      elevation_m: userProfile.goalElevation || "",
+      date: userProfile.goalDate || "",
+      performanceTarget: userProfile.goalPerformance || "",
+      isFirstAttempt: userProfile.firstGoal || "",
+      specificPrepStarted: userProfile.specificPrepStarted || "",
+    },
+    secondaryGoals: userProfile.secondaryObjectives || [],
+    unavailabilities: userProfile.unavailabilities || [],
+    trainingContext: {
+      lifestyle: {
+        availableDays: userProfile.availableDays || "",
+        unpredictableDays: userProfile.unpredictableDays || "",
+        commitments: userProfile.commitments || "",
+        dailyStressLevel: userProfile.dailyStress || "",
+        mentalLoad: userProfile.mentalLoad || "",
+      },
+      environment: {
+        usualClimate: userProfile.usualClimate || "",
+        trainingAltitude_m: userProfile.averageAltitude || "",
+        mainSurface: userProfile.mainSurface || "",
+        trackAccess: userProfile.runningTrackAccess || "Non",
+        mountainAccess: userProfile.trailMountainAccess || "Non",
+        homeTrainerAccess: userProfile.cyclingHomeTrainer || "Non",
+      },
+      preferences: {
+        preferredSessionTypes: userProfile.sessionTypes || [],
+        favoriteEnvironments: userProfile.favoriteEnvironments || [],
+        trainingSoloOrGroup: userProfile.groupPreference || "",
+        musicPreference: userProfile.musicPreference || "",
+        crossTraining: userProfile.crossTrainingSports || [],
+      },
+    },
+    healthAndNutrition: {
+      health: {
+        injuryHistory: userProfile.injuryHistory || "",
+        weakZones: userProfile.weakZones || "",
+        mobilityLevel: userProfile.mobility || "",
+        currentInjuries: userProfile.runningInjuries || userProfile.trailInjuries || userProfile.cyclingInjuries || userProfile.triathlonInjuries || "",
+      },
+      recovery: {
+        averageSleepHours: userProfile.sleepHours || "",
+        sleepQuality: userProfile.sleepQuality || "",
+        recoveryRoutines: userProfile.recoveryRoutines || [],
+      },
+      nutrition: {
+        dietType: userProfile.dietType || "",
+        hydrationHabits_L_per_day: userProfile.hydrationHabits || "",
+        nutritionToleranceDuringEffort: userProfile.nutritionTolerance || "",
+        nutritionBrands: userProfile.nutritionBrands || "",
+        nutritionGoals: userProfile.nutritionGoals || "",
+        supplements: userProfile.supplements || "",
+      },
+    },
+    motivation: {
+      mainReason: userProfile.sportReason || "",
+      motivationLevel: userProfile.motivationLevel || "",
+      coachExpectations: userProfile.coachExpectations || "",
+    },
+  };
 
-  // Si le plan existe déjà, le retourner directement
-  if (user.trainingPlan && user.trainingPlan.length > 0) {
-    return NextResponse.json({ text: JSON.stringify({ summary: "", plan: user.trainingPlan }) });
-  }
-
-  // Compose le prompt pour l'IA (version enrichie et multi-discipline)
-  const prompt = `
-Tu es un coach sportif expert en ${userProfile.discipline || "running"} (choix possible : running, trail, cyclisme, triathlon). Ton rôle est de générer un plan d'entraînement personnalisé, à partir des informations suivantes que je vais te fournir.
-
-## Données utilisateur :
-- Âge : ${userProfile.age || ""}
-- Sexe : ${userProfile.gender || ""}
-- Fréquence cardiaque max : ${userProfile.maxHeartRate || ""}
-- Fréquence cardiaque de repos : ${userProfile.restingHeartRate || ""}
-- Niveau sportif : ${userProfile.level || userProfile.experience || ""}
-- Expérience dans la discipline : ${userProfile.experience || ""}
-- Sports pratiqués actuellement : ${userProfile.sportsBackground || ""}
-- Fréquence d'entraînement possible (nombre de séances par semaine) : ${userProfile.trainingFrequency || userProfile.weeklyVolume || userProfile.runningFrequency || userProfile.trailFrequency || userProfile.cyclingFrequency || userProfile.triathlonFrequency || ""}
-- Contraintes personnelles (jours disponibles, blessures, autres) : ${userProfile.injuries || userProfile.trailJointIssues || userProfile.triathlonConstraints || ""}
-- Matériel disponible : ${userProfile.material || userProfile.runningTrackAccess || userProfile.cyclingHomeTrainer || userProfile.trailGpsWatch || userProfile.triathlonPoolAccess || userProfile.triathlonBikeAccess || ""}
-- Type de terrain local : ${userProfile.terrain || userProfile.trailMountainTraining || userProfile.trailUphillAccess || ""}
-- Objectif principal : ${userProfile.runningGoal || userProfile.trailRaceGoal || userProfile.cyclingGoal || userProfile.triathlonFormat || ""}
-- Type d'objectif : ${userProfile.type_objectif || userProfile.trailRaceGoal || userProfile.cyclingGoal || userProfile.triathlonFormat || ""}
-- Distance : ${userProfile.distance_km || userProfile.trailRaceGoal || userProfile.cyclingGoal || ""}
-- Dénivelé (si applicable) : ${userProfile.denivele_m || userProfile.trailRaceGoal || ""}
-- Date de l'objectif : ${userProfile.runningGoalDate || userProfile.trailRaceDate || userProfile.cyclingGoalDate || userProfile.triathlonDate || ""}
-- Est-ce un premier objectif ou une nouvelle tentative ? : ${userProfile.objectif_premier || ""}
-- Préparation spécifique déjà commencée ? ${userProfile.prepa_en_cours || ""}
-- Objectif de temps ou de classement (si fourni) : ${userProfile.runningGoalTime || userProfile.objectif_performance || ""}
-- Consentement données : ${userProfile.dataUsageConsent || ""}
-- Consentement notifications : ${userProfile.notificationConsent || ""}
-
-## Consignes :
-
-1. Calcule le nombre de semaines restantes avant l'objectif à partir de la date actuelle.
-2. Si l'objectif est dans plus de 8 semaines, structure le plan en deux phases :
-   - Phase générale (renforcement, endurance, travail technique, foncier)
-   - Phase spécifique (adaptée à la course cible)
-3. Si l'objectif est dans 8 semaines ou moins, concentre-toi sur la phase spécifique.
-4. Adapte le contenu du plan à la discipline choisie (type de séance):
-   - **Running** : travail VMA, allure spécifique, endurance fondamentale, seuil
-   - **Trail** : sorties longues avec D+, côtes, descentes techniques, rando-course, travail bâtons
-   - **Cyclisme** : endurance, vélocité, PMA, travail au seuil, FTP, home trainer
-   - **Triathlon** : combinaisons natation/vélo/course à pied, transitions, charges réparties intelligemment
-5. Génère un plan hebdomadaire avec 1 ligne par jour, format :
-   - Jour
-   - Type de séance
-   - Détail de la séance (durée, intensité, zones et allure recommandées, terrain, conseils)
-6. Précise si la semaine est allégée (ex. semaine 4, 8) ou de charge.
-7. Termine par un rappel des conseils personnalisés : nutrition, récupération, sommeil, etc.
-8. Si le niveau est débutant, ne surcharge pas la progression.
-9. Si un objectif secondaire est indiqué (ex : course test ou cyclosportive intermédiaire), intègre-le intelligemment.
-
-**IMPORTANT : La première séance du plan doit obligatoirement commencer à la date d'aujourd'hui (${todayStr}), et toutes les dates du plan doivent être postérieures ou égales à cette date.**
-
-## Format de sortie strictement attendu (JSON OBLIGATOIRE) :
-- Un champ 'plan' qui est un tableau à plat, chaque séance étant un objet avec :
-   - date (obligatoire, format YYYY-MM-DD, la première séance commence aujourd'hui ou le prochain lundi, la dernière séance - la course - doit être à la date d'objectif)
-   - type de séance(ex : Course, Repos, VTT, Fractionné, etc.)
-   - distance 
-   - duration 
-   - description mentionnant les zones et allure recommandées / terrain (optionnel, terrain de la séance, dénivéel) / conseil spécifique de la séance et intérêt pour le sportif
-   - conseils (obligatoire, tableau de strings, rappels, conseils personnalisés, nutrition, récupération, etc.) à afficher sous le calendrier.
-
-### Exemple de format JSON attendu :
+  const systemPrompt = `
+Tu es un coach sportif IA de classe mondiale, expert en physiologie du sport, en planification d'entraînement et en psychologie de la performance pour la discipline spécifiée dans le contexte.
+Ta mission est de générer un bloc d'entraînement structuré de 14 jours pour l'athlète dont le profil complet est détaillé ci-dessous.
+Ta réponse doit être uniquement et exclusivement un objet JSON valide, sans aucun texte, explication, ou formatage Markdown avant ou après le bloc JSON.
+La structure du JSON doit suivre précisément ce modèle:
 {
-  "plan": [
-    {
-      "date": "2025-07-14",
-      "type": "Course",
-      "distance": "10 km",
-      "duration": "50 min",
-      "details": "Allure modérée, terrain vallonné"
-    },
-    {
-      "date": "2025-07-15",
-      "type": "Repos"
-    },
-    ...
-    {
-      "date": "2025-08-02",
-      "type": "Course (Objectif)",
-      "details": "Jour de la course ! 70km, 3400D+"
-    }
-  ],
-  "conseils": [
-    "Hydratation régulière",
-    "Alimentation équilibrée riche en glucides",
-    "Sommeil suffisant (7-9h par nuit)",
-    "Écouter son corps et adapter les séances en fonction",
-    "Bien récupérer entre les séances"
-  ]
+  "blockSummary": { "title": string, "period": string, "mainFocus": string, "intensity": string, "targetFormState": string },
+  "trainingPlan": [{ "day": string, "date": "YYYY-MM-DD", "sessionType": string, "title": string, "description": string, "details": string, "duration_min": number, "distance_km": number, "intensity": number, "rpe": number }],
+  "blockRecap": { "week1": { "volume_km": number, "volume_hours": number, "sessions": number }, "week2": { "volume_km": number, "volume_hours": number, "sessions": number }, "totalSessions": number, "intensityDistribution": { "zone1_2_percentage": number, "zone3_4_percentage": number, "zone5_percentage": number }, "skillsTargeted": string[] },
+  "extraAdvice": { "nutrition": string, "recovery": string, "stressManagement": string, "mentalPrep": string },
+  "motivationalQuote": string
 }
-
-IMPORTANT : Réponds STRICTEMENT au format JSON structuré ci-dessus, sans aucun texte, commentaire, balise ou explication autour. Si tu ne respectes pas ce format, la réponse sera ignorée.
+Prends en compte le tableau 'unavailabilities' qui contient les dates où l'athlète n'est pas disponible. Ne planifie AUCUNE séance d'entraînement sur ces dates. Tu peux y mettre un repos si nécessaire.
+Pour les séances de type 'Fractionné' ou 'Seuil', le champ 'details' doit être particulièrement riche. Il doit inclure la structure complète : échauffement, nombre et durée/distance des répétitions, allure ou zone FC cible, durée et nature de la récupération, et retour au calme.
+Exemple pour 'details': "20min échauffement Z1-Z2; 8x400m à 100% VMA avec récupération 200m footing; 10min retour au calme Z1."
+Assure-toi que la première séance du plan commence à la 'generationDate' fournie dans le contexte. Les dates doivent être séquentielles.
 `;
+  
+  console.log('Données du prompt envoyées à Gemini :', JSON.stringify(promptData, null, 2));
 
-  // Log du prompt envoyé à Gemini
-  console.log('Prompt envoyé à Gemini :', prompt);
-
-  // Appel à Gemini
-  const { text } = await generateText({
-    model: google("gemini-1.5-flash"),
-    system: 'You are a helpful assistant.',
-    prompt,
-  });
-
-  // Log de la réponse brute Gemini
-  console.log('Réponse brute Gemini :', text);
-
-  // Parse le résultat pour stocker le plan
-  let aiResult;
   try {
-    let raw = text.trim();
-    if (raw.startsWith("```json")) {
-      raw = raw.replace(/^```json/, "").replace(/```$/, "").trim();
-    } else if (raw.startsWith("```") ) {
-      raw = raw.replace(/^```/, "").replace(/```$/, "").trim();
-    }
-    raw = raw.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
-    const firstBrace = raw.indexOf('{');
-    const lastBrace = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      raw = raw.substring(firstBrace, lastBrace + 1);
-    }
-    raw = raw.replace(/,(\s*[}\]])/g, '$1');
-    aiResult = JSON.parse(raw);
-  } catch (e) {
-    return NextResponse.json({ error: "Invalid AI response" }, { status: 500 });
-  }
-
-  // Correction des dates si Gemini hallucine
-  if (Array.isArray(aiResult.plan) && aiResult.plan.length > 0) {
-    const startDate = new Date(todayStr);
-    aiResult.plan.forEach((session: any, idx: any) => {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + idx);
-      session.date = date.toISOString().split('T')[0];
+    const { text } = await generateText({
+      model: google("gemini-1.5-flash"),
+      system: systemPrompt,
+      prompt: `Génère le plan d'entraînement pour cet utilisateur : ${JSON.stringify(promptData)}`,
     });
+
+    console.log('Réponse brute de Gemini :', text);
+    
+    // Nettoyage de la réponse pour extraire le JSON pur
+    let cleanText = text.trim();
+    const jsonMatch = cleanText.match(/```json\n([\s\S]*?)\n```/);
+    if (jsonMatch && jsonMatch[1]) {
+      cleanText = jsonMatch[1];
+    }
+
+    // Le modèle est instruit de renvoyer du JSON, donc on parse directement.
+    const aiResult = JSON.parse(cleanText);
+
+    // Petite validation pour s'assurer que la structure de base est là
+    if (!aiResult.blockSummary || !Array.isArray(aiResult.trainingPlan)) {
+      throw new Error("La réponse de l'IA n'a pas la structure attendue.");
+    }
+
+    // Sauvegarde de l'objet JSON complet du plan
+    await User.findOneAndUpdate(
+      { email },
+      { $set: { planData: aiResult } },
+      { new: true }
+    );
+    
+    return NextResponse.json(aiResult);
+
+  } catch (e: any) {
+    console.error("Erreur lors de la génération ou du parsing du plan :", e);
+    // En cas d'erreur, renvoyer un objet d'erreur clair
+    return NextResponse.json(
+      { error: "Erreur lors de la génération du plan d'entraînement.", details: e.message },
+      { status: 500 }
+    );
   }
-
-  // Stocke directement le plan Gemini (déjà à plat avec dates)
-  await User.findOneAndUpdate(
-    { email },
-    { $set: { trainingPlan: aiResult.plan } }
-  );
-
-  return NextResponse.json({ text });
 } 

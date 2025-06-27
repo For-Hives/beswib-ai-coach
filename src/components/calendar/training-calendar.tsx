@@ -22,6 +22,8 @@ export interface TrainingSession {
   elevation?: number;
   timeGoal?: string;
   isIndispo?: boolean;
+  intensity?: number;
+  rpe?: number;
 }
 
 interface TrainingCalendarProps {
@@ -39,6 +41,8 @@ const getSessionColor = (type: string) => {
       return "bg-blue-100 text-blue-800 border-blue-200"
     case "Long":
       return "bg-purple-100 text-purple-800 border-purple-200"
+    case "Seuil":
+      return "bg-orange-100 text-orange-800 border-orange-200"
     case "Renforcement musculaire":
       return "bg-yellow-100 text-yellow-800 border-yellow-200"
     default:
@@ -56,6 +60,17 @@ function detectSessionType(session: TrainingSession): string {
   if (session.type === "Renforcement musculaire") {
     return "Renforcement musculaire";
   }
+  if (session.type === "Repos") {
+    return "Récupération";
+  }
+
+  if (session.intensity) {
+    if (session.intensity >= 5) return "Fractionné";
+    if (session.intensity >= 3) return "Seuil";
+    if (session.intensity === 2) return "Endurance";
+    if (session.intensity <= 1) return "Récupération";
+  }
+  
   if (session.distance) {
     const match = session.distance.match(/(\d+([.,]\d+)?)\s*km/i);
     if (match && parseFloat(match[1].replace(',', '.')) >= 20) {
@@ -65,10 +80,11 @@ function detectSessionType(session: TrainingSession): string {
   if (session.description?.toLowerCase().includes("fractionné")) {
     return "Fractionné";
   }
-  if (session.description?.toLowerCase().includes("allure lente de récupération")) {
+  if (session.description?.toLowerCase().includes("récupération")) {
     return "Récupération";
   }
-  return "Endurance";
+
+  return session.type || "Endurance";
 }
 
 function convertSpeedToPace(speed: number | string | undefined) {
@@ -347,6 +363,10 @@ export function TrainingCalendar({ sessions = [], onDeleteIndispo }: TrainingCal
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-purple-100 border border-purple-200 rounded"></div>
             <span className="text-sm">Long</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-orange-100 border border-orange-200 rounded"></div>
+            <span className="text-sm">Seuil</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-yellow-100 border border-yellow-200 rounded"></div>
