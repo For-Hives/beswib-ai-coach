@@ -27,12 +27,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let tokenRes;
   try {
     tokenRes = await axios.post('https://www.strava.com/oauth/token', {
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: redirectUri,
-    });
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    grant_type: 'authorization_code',
+    redirect_uri: redirectUri,
+  });
   } catch (err: any) {
     console.error('Erreur lors de la récupération du token Strava:', err?.response?.data || err);
     return res.status(500).json({ error: 'Erreur lors de la récupération du token Strava', details: err?.response?.data || err });

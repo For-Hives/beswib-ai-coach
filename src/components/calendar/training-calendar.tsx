@@ -18,10 +18,15 @@ export interface TrainingSession {
   details?: string;
   average_speed?: number | string;
   average_heartrate?: number;
+  name?: string;
+  elevation?: number;
+  timeGoal?: string;
+  isIndispo?: boolean;
 }
 
 interface TrainingCalendarProps {
   sessions?: TrainingSession[];
+  onDeleteIndispo?: (date: string) => void;
 }
 
 const getSessionColor = (type: string) => {
@@ -76,7 +81,21 @@ function convertSpeedToPace(speed: number | string | undefined) {
   return `${min}:${sec} min/km`;
 }
 
-export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
+function getCourseInfo(session: any) {
+  if (!session) return null;
+  if (session.type && (session.type.toLowerCase().includes("course") || session.type.toLowerCase().includes("objectif"))) {
+    return {
+      name: session.name || session.details || session.description || "Course",
+      distance: session.distance,
+      elevation: session.elevation,
+      timeGoal: session.timeGoal,
+      date: session.date,
+    };
+  }
+  return null;
+}
+
+export function TrainingCalendar({ sessions = [], onDeleteIndispo }: TrainingCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSession, setSelectedSession] = useState<any>(null)
 
@@ -107,6 +126,12 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
   const getSessionsForDate = (date: Date) => {
     return sessions.filter((session) => {
       const sessionDate = parseLocalDate(session.date);
+      // Affiche toujours les indispos
+      if ((session as any).isIndispo || session.type === "Indisponibilité") return (
+        sessionDate.getFullYear() === date.getFullYear() &&
+        sessionDate.getMonth() === date.getMonth() &&
+        sessionDate.getDate() === date.getDate()
+      );
       if (!session.distance && detectSessionType(session) !== "Renforcement musculaire") return false;
       return (
         sessionDate.getFullYear() === date.getFullYear() &&
@@ -184,79 +209,116 @@ export function TrainingCalendar({ sessions = [] }: TrainingCalendarProps) {
                     const key = session.id ?? `${session.date || ''}-${session.type || ''}-${s.semaine || ''}-${s.phase || ''}-${idx}`;
                     const descId = `session-desc-${key}`;
                     const sessionType = detectSessionType(session);
+                    const isGoal = (s.isGoal || session.type === "Objectif");
+                    const isIndispo = s.isIndispo || session.type === "Indisponibilité";
+                    if (isIndispo) {
+                      return (
+                        <div key={key} className="flex items-center gap-1">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-600 text-white rounded-full text-xs font-bold">
+                            Indispo
+                            {s.description && <span className="ml-1 font-normal">{s.description}</span>}
+                          </span>
+                          {onDeleteIndispo && (
+                            <button onClick={() => onDeleteIndispo(s.date)} className="ml-1 text-red-600 hover:text-red-800" title="Supprimer l'indisponibilité">
+                              <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
                     return (
                       <Dialog key={key}>
                         <DialogTrigger asChild>
                           <div
-                            className={`text-xs p-1 rounded cursor-pointer border ${getSessionColor(sessionType)} ${
-                              session.completed ? "opacity-75" : ""
-                            }`}
+                            className={`text-xs p-1 rounded cursor-pointer border ${isGoal ? "bg-purple-100 text-purple-900 border-purple-300 font-bold" : getSessionColor(sessionType)} ${session.completed ? "opacity-75" : ""}`}
                             onClick={() => setSelectedSession(session)}
                           >
-                            {sessionType}
+                            {isGoal ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-600 text-white rounded-full text-xs font-bold">
+                                Course
+                                {s.name && <span className="ml-1 font-normal">{s.name}</span>}
+                              </span>
+                            ) : (
+                              sessionType
+                            )}
                             {session.completed && " ✓"}
                           </div>
                         </DialogTrigger>
                         <DialogContent aria-describedby={descId}>
                           <DialogHeader>
-                            <DialogTitle>Détails de la séance</DialogTitle>
+                            <DialogTitle>{isGoal ? "Détail de l'objectif" : "Détails de la séance"}</DialogTitle>
                           </DialogHeader>
                           <p id={descId} className="sr-only">
-                            Détail complet de la séance d'entraînement sélectionnée, incluant type, date, distance, durée et description.
+                            {isGoal ? "Détail complet de l'objectif (course), incluant nom, date, distance, dénivelé, temps cible et description." : "Détail complet de la séance d'entraînement sélectionnée, incluant type, date, distance, durée et description."}
                           </p>
                           <div className="space-y-4">
-                            <div className="flex items-center gap-2">
-                              <Badge className={getSessionColor(sessionType)}>{sessionType}</Badge>
-                              <span className="text-sm text-gray-600">
-                                {new Date(session.date).toLocaleDateString("fr-FR")}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              {(session.distance || session.duration) ? (
-                                <>
-                                  <div>
-                                    <p className="text-sm font-medium">Distance</p>
-                                    <p className="text-lg">{session.distance || "-"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium">Durée</p>
-                                    <p className="text-lg">{session.duration || "-"}</p>
-                                  </div>
-                                </>
-                              ) : null}
-                              {(session.average_speed || session.average_heartrate) && (
-                                <>
-                                  {session.average_speed && (
-                                    <div>
-                                      <p className="text-sm font-medium">Allure moyenne</p>
-                                      <p className="text-lg">{convertSpeedToPace(session.average_speed)}</p>
-                                    </div>
-                                  )}
-                                  {session.average_heartrate && (
-                                    <div>
-                                      <p className="text-sm font-medium">FC Moyenne</p>
-                                      <p className="text-lg">{session.average_heartrate} bpm</p>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                            {(session.details || session.description) && (
-                              <div className="mt-2">
-                                <p className="text-sm font-medium">Description</p>
-                                <p className="text-gray-700">{session.details || session.description}</p>
-                              </div>
-                            )}
-                            {session.completed ? (
-                              <div className="p-3 bg-green-50 rounded-lg">
-                                <p className="text-green-800 font-medium">✓ Séance terminée</p>
-                                <p className="text-sm text-green-600">Bonne performance ! Continuez ainsi.</p>
+                            {isGoal ? (
+                              <div className="p-3 bg-purple-50 rounded-lg">
+                                <div className="font-bold text-purple-800 text-lg mb-1">{s.name || "Course"}</div>
+                                <div className="text-sm text-purple-700">
+                                  {s.distance && <span>Distance : <b>{s.distance}</b> km<br/></span>}
+                                  {s.elevation && <span>Dénivelé : <b>{s.elevation}</b> m<br/></span>}
+                                  {s.timeGoal && <span>Objectif temps : <b>{s.timeGoal}</b><br/></span>}
+                                  {s.date && <span>Date : <b>{new Date(s.date).toLocaleDateString('fr-FR')}</b></span>}
+                                </div>
+                                {s.description && <div className="mt-2 text-purple-900 text-sm">{s.description}</div>}
                               </div>
                             ) : (
-                              <div className="p-3 bg-blue-50 rounded-lg">
-                                <p className="text-blue-800 font-medium">📅 Séance programmée</p>
-                                <p className="text-sm text-blue-600">N'oubliez pas votre séance d'entraînement.</p>
-                              </div>
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <Badge className={getSessionColor(sessionType)}>{sessionType}</Badge>
+                                  <span className="text-sm text-gray-600">
+                                    {new Date(session.date).toLocaleDateString("fr-FR")}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  {(session.distance || session.duration) ? (
+                                    <>
+                                      <div>
+                                        <p className="text-sm font-medium">Distance</p>
+                                        <p className="text-lg">{session.distance || "-"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium">Durée</p>
+                                        <p className="text-lg">{session.duration || "-"}</p>
+                                      </div>
+                                    </>
+                                  ) : null}
+                                  {(session.average_speed || session.average_heartrate) && (
+                                    <>
+                                      {session.average_speed && (
+                                        <div>
+                                          <p className="text-sm font-medium">Allure moyenne</p>
+                                          <p className="text-lg">{convertSpeedToPace(session.average_speed)}</p>
+                                        </div>
+                                      )}
+                                      {session.average_heartrate && (
+                                        <div>
+                                          <p className="text-sm font-medium">FC Moyenne</p>
+                                          <p className="text-lg">{session.average_heartrate} bpm</p>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                {(session.details || session.description) && (
+                                  <div className="mt-2">
+                                    <p className="text-sm font-medium">Description</p>
+                                    <p className="text-gray-700">{session.details || session.description}</p>
+                                  </div>
+                                )}
+                                {session.completed ? (
+                                  <div className="p-3 bg-green-50 rounded-lg">
+                                    <p className="text-green-800 font-medium">✓ Séance terminée</p>
+                                    <p className="text-sm text-green-600">Bonne performance ! Continuez ainsi.</p>
+                                  </div>
+                                ) : (
+                                  <div className="p-3 bg-blue-50 rounded-lg">
+                                    <p className="text-blue-800 font-medium">📅 Séance programmée</p>
+                                    <p className="text-sm text-blue-600">N'oubliez pas votre séance d'entraînement.</p>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         </DialogContent>

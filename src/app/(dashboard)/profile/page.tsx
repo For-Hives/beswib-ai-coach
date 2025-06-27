@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage as AvatarImg } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Settings, Trophy, Target, Calendar } from "lucide-react"
+import { Settings, Trophy, Target, Calendar, Pencil, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,12 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [stravaPrs, setStravaPrs] = useState<any>(null)
   const pathname = usePathname()
+  const [editGoalOpen, setEditGoalOpen] = useState(false);
+  const [editSecondaryOpen, setEditSecondaryOpen] = useState<{open: boolean, idx: number | null}>({open: false, idx: null});
+  const [goalDraft, setGoalDraft] = useState<any>({});
+  const [secondaryDraft, setSecondaryDraft] = useState<any>({});
+  const [addSecondaryOpen, setAddSecondaryOpen] = useState(false);
+  const [addSecondaryDraft, setAddSecondaryDraft] = useState<any>({ name: '', distance: '', elevation: '', date: '', timeGoal: '' });
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -86,6 +92,69 @@ export default function ProfilePage() {
     setEditOpen(false)
     setIsSaving(false)
   }
+
+  // Sauvegarde du profil après modif/suppression d'objectif
+  const saveProfile = async (newProfile: any) => {
+    const token = localStorage.getItem("token");
+    await fetch("/api/save-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(newProfile),
+    });
+    setProfile(newProfile);
+  };
+
+  // Suppression objectif principal
+  const handleDeleteGoal = async () => {
+    const newProfile = { ...profile, goalName: "", goalDistance: "", goalElevation: "", goalDate: "", goalPerformance: "" };
+    await saveProfile(newProfile);
+  };
+
+  // Suppression objectif secondaire
+  const handleDeleteSecondary = async (idx: number) => {
+    const newSecondaries = [...(profile.secondaryObjectives || [])];
+    newSecondaries.splice(idx, 1);
+    const newProfile = { ...profile, secondaryObjectives: newSecondaries };
+    await saveProfile(newProfile);
+  };
+
+  // Edition objectif principal
+  const handleEditGoal = () => {
+    setGoalDraft({
+      name: profile.goalName || "",
+      distance: profile.goalDistance || "",
+      elevation: profile.goalElevation || "",
+      date: profile.goalDate || "",
+      timeGoal: profile.goalPerformance || "",
+    });
+    setEditGoalOpen(true);
+  };
+  const handleSaveGoal = async () => {
+    const newProfile = {
+      ...profile,
+      goalName: goalDraft.name,
+      goalDistance: goalDraft.distance,
+      goalElevation: goalDraft.elevation,
+      goalDate: goalDraft.date,
+      goalPerformance: goalDraft.timeGoal,
+    };
+    await saveProfile(newProfile);
+    setEditGoalOpen(false);
+  };
+
+  // Edition objectif secondaire
+  const handleEditSecondary = (idx: number) => {
+    setSecondaryDraft({ ...(profile.secondaryObjectives?.[idx] || {}) });
+    setEditSecondaryOpen({ open: true, idx });
+  };
+  const handleSaveSecondary = async () => {
+    if (editSecondaryOpen.idx === null) return;
+    const newSecondaries = [...(profile.secondaryObjectives || [])];
+    newSecondaries[editSecondaryOpen.idx] = secondaryDraft;
+    const newProfile = { ...profile, secondaryObjectives: newSecondaries };
+    await saveProfile(newProfile);
+    setEditSecondaryOpen({ open: false, idx: null });
+  };
 
   if (loading) return <div>Chargement...</div>
 
@@ -172,16 +241,84 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <h3 className="font-semibold text-blue-900">Marathon de Paris 2024</h3>
-                <p className="text-blue-700">Objectif : 3h30</p>
-                <p className="text-sm text-blue-600">Date : 7 avril 2024</p>
+              <div className="p-4 bg-blue-50 rounded-lg flex justify-between items-center gap-2">
+                <div>
+                  <h3 className="font-semibold text-blue-900">{profile?.goalName || '-'}</h3>
+                  <p className="text-blue-700">Objectif : {profile?.goalPerformance || '-'}{profile?.goalDistance ? ` • ${profile.goalDistance} km` : ''}{profile?.goalElevation ? ` • ${profile.goalElevation} m D+` : ''}</p>
+                  <p className="text-sm text-blue-600">Date : {profile?.goalDate ? new Date(profile.goalDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="icon" variant="ghost" onClick={handleEditGoal}><Pencil className="w-4 h-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={handleDeleteGoal}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+                </div>
               </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <h3 className="font-semibold text-green-900">10km en moins de 45min</h3>
-                <p className="text-green-700">Objectif intermédiaire</p>
-                <p className="text-sm text-green-600">Date cible : 15 février 2024</p>
+              <Dialog open={editGoalOpen} onOpenChange={setEditGoalOpen}>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Modifier l'objectif principal</DialogTitle></DialogHeader>
+                  <div className="space-y-2">
+                    <Label>Nom</Label>
+                    <Input value={goalDraft.name} onChange={e => setGoalDraft((d: any) => ({ ...d, name: e.target.value }))} />
+                    <Label>Distance (km)</Label>
+                    <Input type="number" value={goalDraft.distance} onChange={e => setGoalDraft((d: any) => ({ ...d, distance: e.target.value }))} />
+                    <Label>Dénivelé (m)</Label>
+                    <Input type="number" value={goalDraft.elevation} onChange={e => setGoalDraft((d: any) => ({ ...d, elevation: e.target.value }))} />
+                    <Label>Date</Label>
+                    <Input type="date" value={goalDraft.date} onChange={e => setGoalDraft((d: any) => ({ ...d, date: e.target.value }))} />
+                    <Label>Objectif temps</Label>
+                    <Input value={goalDraft.timeGoal} onChange={e => setGoalDraft((d: any) => ({ ...d, timeGoal: e.target.value }))} />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setEditGoalOpen(false)}>Annuler</Button>
+                    <Button onClick={handleSaveGoal}>Enregistrer</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              {/* Objectifs secondaires */}
+              {profile?.secondaryObjectives && profile.secondaryObjectives.length > 0 ? (
+                profile.secondaryObjectives.map((obj: any, idx: number) => (
+                  <div key={idx} className="p-4 bg-green-50 rounded-lg flex justify-between items-center gap-2">
+                    <div>
+                      <h3 className="font-semibold text-green-900">{obj.name || '-'}</h3>
+                      <p className="text-green-700">Objectif : {obj.timeGoal || '-'}{obj.distance ? ` • ${obj.distance} km` : ''}{obj.elevation ? ` • ${obj.elevation} m D+` : ''}</p>
+                      <p className="text-sm text-green-600">Date cible : {obj.date ? new Date(obj.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="icon" variant="ghost" onClick={() => handleEditSecondary(idx)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleDeleteSecondary(idx)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 bg-green-50 rounded-lg text-green-900">Aucun objectif secondaire renseigné.</div>
+              )}
+              <Button className="mt-2" variant="outline" onClick={() => setAddSecondaryOpen(true)}>Ajouter un objectif secondaire</Button>
+              <Dialog open={addSecondaryOpen} onOpenChange={setAddSecondaryOpen}>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Ajouter un objectif secondaire</DialogTitle></DialogHeader>
+                  <div className="space-y-2">
+                    <Label>Nom</Label>
+                    <Input value={addSecondaryDraft.name} onChange={e => setAddSecondaryDraft((d: any) => ({ ...d, name: e.target.value }))} />
+                    <Label>Distance (km)</Label>
+                    <Input type="number" value={addSecondaryDraft.distance} onChange={e => setAddSecondaryDraft((d: any) => ({ ...d, distance: e.target.value }))} />
+                    <Label>Dénivelé (m)</Label>
+                    <Input type="number" value={addSecondaryDraft.elevation} onChange={e => setAddSecondaryDraft((d: any) => ({ ...d, elevation: e.target.value }))} />
+                    <Label>Date</Label>
+                    <Input type="date" value={addSecondaryDraft.date} onChange={e => setAddSecondaryDraft((d: any) => ({ ...d, date: e.target.value }))} />
+                    <Label>Objectif temps</Label>
+                    <Input value={addSecondaryDraft.timeGoal} onChange={e => setAddSecondaryDraft((d: any) => ({ ...d, timeGoal: e.target.value }))} />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setAddSecondaryOpen(false)}>Annuler</Button>
+                    <Button onClick={async () => {
+                      const newSecondaries = [...(profile.secondaryObjectives || []), addSecondaryDraft];
+                      const newProfile = { ...profile, secondaryObjectives: newSecondaries };
+                      await saveProfile(newProfile);
+                      setAddSecondaryOpen(false);
+                      setAddSecondaryDraft({ name: '', distance: '', elevation: '', date: '', timeGoal: '' });
+                    }} disabled={!addSecondaryDraft.name || !addSecondaryDraft.distance || !addSecondaryDraft.date}>Ajouter</Button>
               </div>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 

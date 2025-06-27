@@ -36,37 +36,43 @@ export default function CardProfilePage() {
   // Discipline pour records dynamiques
   const discipline = profile?.discipline?.toLowerCase();
 
-  // Records dynamiques
+  // Records dynamiques (nouveaux champs)
   let records = null;
   if (discipline === "running" || discipline === "trail" || discipline === "triathlon") {
     records = (
       <>
-        <div><b>Record 10km :</b> {profile?.best10k || '-'}</div>
-        <div><b>Record semi :</b> {profile?.bestHalf || '-'}</div>
-        <div><b>Record marathon :</b> {profile?.bestMarathon || '-'}</div>
+        <div><b>Record 10km :</b> {profile?.record10k || '-'}</div>
+        <div><b>Test VMA/FTP :</b> {profile?.vmaOrFtp || '-'}</div>
+        <div><b>Durée max effort :</b> {profile?.maxEffortDuration ? profile.maxEffortDuration + ' min' : '-'}</div>
       </>
     );
   } else if (discipline === "cyclisme" || discipline === "cycling") {
     records = (
       <>
-        <div><b>Record 50km :</b> (à venir via Strava)</div>
-        <div><b>Record 100km :</b> (à venir via Strava)</div>
-        <div><b>Record 200km :</b> (à venir via Strava)</div>
-        <div><b>Plus gros dénivelé :</b> (à venir via Strava)</div>
+        <div><b>FTP :</b> {profile?.cyclingFTP || profile?.vmaOrFtp || '-'}</div>
+        <div><b>Test FTP/PMA :</b> {profile?.cyclingTestDone || '-'}</div>
+        <div><b>Durée max effort :</b> {profile?.maxEffortDuration ? profile.maxEffortDuration + ' min' : '-'}</div>
       </>
     );
   }
 
   // Variables spécifiques (exemple trail)
-  const montagne = profile?.trailMountainTraining;
-  const renfo = profile?.trailStrengthTraining;
-  const materiel = profile?.material || profile?.runningTrackAccess || profile?.cyclingHomeTrainer || profile?.trailGpsWatch || profile?.triathlonPoolAccess || profile?.triathlonBikeAccess;
+  const montagne = profile?.trailMountainAccess || profile?.trailMountainTraining || '-';
+  const renfo = profile?.trailStrength || profile?.trailStrengthTraining || '-';
+  const materiel = [
+    profile?.runningTrackAccess,
+    profile?.cyclingHomeTrainer,
+    profile?.trailBaroGps,
+    profile?.runningGpsWatch,
+    profile?.triathlonPoolAccess,
+    profile?.triathlonBikeAccess
+  ].filter(Boolean).join(', ') || '-';
 
-  // Objectif principal et date
-  const objectif = profile?.runningGoal || profile?.trailRaceGoal || profile?.cyclingGoal || profile?.triathlonFormat || '-';
-  const objectifDate = profile?.runningGoalDate || profile?.trailRaceDate || profile?.cyclingGoalDate || profile?.triathlonDate || '';
+  // Objectif principal et date (nouveaux champs)
+  const objectif = profile?.runningGoal || profile?.trailGoal || profile?.cyclingGoal || profile?.triathlonFormat || profile?.goalName || '-';
+  const objectifDate = profile?.runningGoalDate || profile?.trailGoalDate || profile?.cyclingGoalDate || profile?.triathlonDate || profile?.goalDate || '';
   const joursAvantObjectif = getDaysTo(objectifDate);
-  const freq = profile?.weeklyVolume || profile?.runningFrequency || profile?.trailFrequency || profile?.cyclingFrequency || profile?.triathlonFrequency || '-';
+  const freq = profile?.runningFrequency || profile?.trailFrequency || profile?.cyclingFrequency || profile?.triathlonFrequency || '-';
 
   // Ajout du calcul des zones cardiaques
   const fcMax = parseInt(profile?.maxHeartRate);
@@ -108,6 +114,13 @@ export default function CardProfilePage() {
     ];
   }
 
+  // Nouveaux blocs d'infos enrichies
+  const sommeil = profile?.sleepHours || profile?.sleepQuality ? `${profile.sleepHours || '-'} h / Qualité: ${profile.sleepQuality || '-'}` : '-';
+  const nutrition = profile?.dietType || profile?.hydrationHabits ? `${profile.dietType || '-'} / ${profile.hydrationHabits || '-'} L/j` : '-';
+  const chargeMentale = profile?.mentalLoad || '-';
+  const stress = profile?.dailyStress || '-';
+  const recup = profile?.recoveryRoutines?.length ? profile.recoveryRoutines.join(', ') : '-';
+
   return (
     <>
       <div className="flex gap-4 border-b mb-6">
@@ -137,7 +150,11 @@ export default function CardProfilePage() {
             <div><b>Poids :</b> {profile?.weight || '-'}</div>
             <div><b>FC max :</b> {profile?.maxHeartRate || '-'}</div>
             <div><b>FC repos :</b> {profile?.restingHeartRate || '-'}</div>
-            <div><b>Expérience :</b> {profile?.experience || profile?.runningExperience || profile?.trailExperience || profile?.cyclingExperience || profile?.triathlonSwimLevel || '-'}</div>
+            <div><b>Expérience :</b> {profile?.runningExperience || profile?.trailExperience || profile?.cyclingExperience || profile?.triathlonSwimLevel || '-'}</div>
+            <div><b>Sommeil :</b> {sommeil}</div>
+            <div><b>Récupération :</b> {recup}</div>
+            <div><b>Charge mentale :</b> {chargeMentale}</div>
+            <div><b>Stress quotidien :</b> {stress}</div>
           </CardContent>
         </Card>
 
@@ -148,8 +165,11 @@ export default function CardProfilePage() {
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div><b>Discipline principale :</b> {profile?.discipline || '-'}</div>
-            <div><b>Antécédents sportifs :</b> {profile?.sportsBackground || '-'}</div>
-            <div><b>Volume mensuel :</b> (à venir via Strava)</div>
+            <div><b>Type d'alimentation :</b> {nutrition}</div>
+            <div><b>Objectif principal :</b> {objectif}</div>
+            <div><b>Date objectif :</b> {objectifDate || '-'}</div>
+            <div><b>Jours avant objectif :</b> {joursAvantObjectif}</div>
+            <div><b>Fréquence d'entraînement :</b> {freq}</div>
             {records}
           </CardContent>
         </Card>
@@ -160,22 +180,24 @@ export default function CardProfilePage() {
             <CardTitle>Spécificités & Matériel</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <div><b>Montagne possible :</b> {montagne || '-'}</div>
-            <div><b>Renforcement OK :</b> {renfo || '-'}</div>
-            <div><b>Matériel :</b> {materiel || '-'}</div>
+            <div><b>Montagne possible :</b> {montagne}</div>
+            <div><b>Renforcement OK :</b> {renfo}</div>
+            <div><b>Matériel :</b> {materiel}</div>
           </CardContent>
         </Card>
 
         {/* Bas droite */}
         <Card>
           <CardHeader>
-            <CardTitle>Objectifs & Entraînement</CardTitle>
+            <CardTitle>Vie & Bien-être</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <div><b>Objectif principal :</b> {objectif}</div>
-            <div><b>Date objectif :</b> {objectifDate || '-'}</div>
-            <div><b>Jours avant objectif :</b> {joursAvantObjectif}</div>
-            <div><b>Fréquence d'entraînement :</b> {freq}</div>
+            <div><b>Jours disponibles :</b> {profile?.availableDays || '-'}</div>
+            <div><b>Jours imprévisibles :</b> {profile?.unpredictableDays || '-'}</div>
+            <div><b>Engagements :</b> {profile?.commitments || '-'}</div>
+            <div><b>Motivation :</b> {profile?.motivationLevel || '-'}</div>
+            <div><b>Objectifs secondaires :</b> {profile?.secondaryGoals || '-'}</div>
+            <div><b>Attentes coach IA :</b> {profile?.coachExpectations || '-'}</div>
           </CardContent>
         </Card>
       </div>

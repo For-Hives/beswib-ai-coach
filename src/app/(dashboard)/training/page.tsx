@@ -9,6 +9,8 @@ export default function TrainingPlanPage() {
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [advice, setAdvice] = useState<string[]>([]);
+  const [goalEvents, setGoalEvents] = useState<TrainingSession[]>([]);
+  const [indispoEvents, setIndispoEvents] = useState<TrainingSession[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -72,6 +74,63 @@ export default function TrainingPlanPage() {
       });
   }, []);
 
+  // Ajout : récupération des objectifs du profil
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("/api/profile", {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        const profile = data.profile || {};
+        const events: TrainingSession[] = [];
+        // Objectif principal
+        if (profile.goalDate && profile.goalName) {
+          events.push({
+            id: "goal",
+            date: profile.goalDate.slice(0, 10),
+            type: "Objectif",
+            name: profile.goalName,
+            distance: profile.goalDistance ? String(profile.goalDistance) : undefined,
+            elevation: profile.goalElevation ? String(profile.goalElevation) : undefined,
+            timeGoal: profile.goalPerformance || undefined,
+            description: "Objectif principal",
+            isGoal: true,
+          } as any);
+        }
+        // Objectifs secondaires
+        if (Array.isArray(profile.secondaryObjectives)) {
+          profile.secondaryObjectives.forEach((obj: any, idx: number) => {
+            if (obj.date && obj.name) {
+              events.push({
+                id: `secondary-goal-${idx}`,
+                date: obj.date.slice(0, 10),
+                type: "Objectif",
+                name: obj.name,
+                distance: obj.distance ? String(obj.distance) : undefined,
+                elevation: obj.elevation ? String(obj.elevation) : undefined,
+                timeGoal: obj.timeGoal || undefined,
+                description: "Objectif secondaire",
+                isGoal: true,
+              } as any);
+            }
+          });
+        }
+        setGoalEvents(events);
+        // Indisponibilités
+        const indispos: TrainingSession[] = (profile.unavailabilities || []).map((u: any, idx: number) => ({
+          id: `indispo-${idx}`,
+          date: u.date,
+          type: "Indisponibilité",
+          distance: "",
+          duration: "",
+          description: u.reason || "Indisponible",
+          isIndispo: true,
+        } as any));
+        setIndispoEvents(indispos);
+      });
+  }, []);
+
   const handleRegenerate = async () => {
     const token = localStorage.getItem("token");
     await fetch("/api/training-plan/regenerate", {
@@ -113,10 +172,10 @@ export default function TrainingPlanPage() {
         <CardContent>
           {loading ? (
             <p>Chargement...</p>
-          ) : plan.length === 0 ? (
+          ) : plan.length === 0 && goalEvents.length === 0 ? (
             <p>Aucune séance trouvée.</p>
           ) : (
-            <TrainingCalendar sessions={plan} />
+            <TrainingCalendar sessions={[...plan, ...goalEvents, ...indispoEvents]} />
           )}
         </CardContent>
       </Card>
