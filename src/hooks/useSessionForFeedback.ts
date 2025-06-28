@@ -25,6 +25,7 @@ interface RealizedSession {
 export interface SessionForFeedback {
   planned: PlannedSession;
   realized: RealizedSession;
+  isUnplanned?: boolean;
 }
 
 // Function to find the closest planned session to a realized one
@@ -33,13 +34,19 @@ const findMatchingSession = (realized: RealizedSession, plan: PlannedSession[]):
   let closestSession: PlannedSession | null = null;
   let smallestDiff = Infinity;
 
+  // Prioritize type mapping. Strava "Run" matches "Endurance", "Fractionné", etc.
+  const isRun = realized.type === 'Run';
+  
   for (const planned of plan) {
     const plannedDate = new Date(planned.date);
     const timeDiff = Math.abs(plannedDate.getTime() - realizedDate.getTime());
-    
-    // Check if it's on the same day (or within 12 hours)
-    if (timeDiff < 12 * 60 * 60 * 1000) {
-      if (timeDiff < smallestDiff) {
+
+    // Check if it's within a 48-hour window (24h before, 24h after)
+    if (timeDiff < 24 * 2 * 60 * 60 * 1000) {
+      // Basic type matching: a Strava "Run" can match any running session type.
+      const typeMatches = isRun && ['Endurance', 'Fractionné', 'Long', 'Récupération', 'Seuil'].includes(planned.sessionType);
+
+      if (typeMatches && timeDiff < smallestDiff) {
         smallestDiff = timeDiff;
         closestSession = planned;
       }
@@ -71,15 +78,43 @@ export const useSessionForFeedback = () => {
         const submittedFeedbackIds = new Set(feedbacks.map(f => f.sessionId));
         const recentActivities = activities.filter(a => !submittedFeedbackIds.has(String(a.id)));
         
-        // Find the most recent activity that has a matching planned session and no feedback
+        if (recentActivities.length === 0) {
+          setLoading(false);
+          return;
+        }
+
+        let sessionToReview: SessionForFeedback | null = null;
+
+        // 1. Try to find a planned session for the most recent activities
         for (const activity of recentActivities) {
           const matchingPlan = findMatchingSession(activity, planData.trainingPlan);
           if (matchingPlan) {
-            setSessionForFeedback({ planned: matchingPlan, realized: activity });
-            // We found our session, we can stop
+            sessionToReview = { planned: matchingPlan, realized: activity, isUnplanned: false };
             break; 
           }
         }
+
+        // 2. If no match, take the most recent unplanned activity (that is not rest)
+        if (!sessionToReview) {
+          const latestActivity = recentActivities[0];
+          const activityType = latestActivity.type.toLowerCase();
+          const isRestType = ['walk', 'yoga'].includes(activityType) || latestActivity.name.toLowerCase().includes('repos');
+
+          if (!isRestType) {
+            const dummyPlannedSession: PlannedSession = {
+              id: `unplanned-${latestActivity.id}`,
+              date: latestActivity.start_date,
+              sessionType: latestActivity.type,
+              title: latestActivity.name || 'Séance imprévue',
+              duration_min: Math.round(latestActivity.moving_time / 60),
+              distance_km: parseFloat((latestActivity.distance / 1000).toFixed(2)),
+            };
+            sessionToReview = { planned: dummyPlannedSession, realized: latestActivity, isUnplanned: true };
+          }
+        }
+        
+        setSessionForFeedback(sessionToReview);
+
       } catch (error) {
         console.error("Error fetching session for feedback:", error);
       } finally {

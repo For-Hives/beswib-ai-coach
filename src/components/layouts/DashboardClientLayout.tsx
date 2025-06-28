@@ -10,6 +10,8 @@ import { AnimatePresence } from 'framer-motion';
 import { ChatbotFab } from '../ui/ChatbotFab';
 import { FeedbackChatbot } from '../feedback/FeedbackChatbot';
 import { useSessionForFeedback } from '@/hooks/useSessionForFeedback';
+import { Button } from '@/components/ui/button';
+import { MessageSquareText } from 'lucide-react';
 
 const links = [
   { label: "Dashboard", href: "/dashboard" },
@@ -22,14 +24,14 @@ const links = [
 const DashboardClientLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { loading: authLoading } = useAuth();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [isChatbotOpen, setChatbotOpen] = useState(false);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const pathname = usePathname();
   const { sessionForFeedback, loading: feedbackLoading } = useSessionForFeedback();
 
   useEffect(() => {
-    // Automatically open the chatbot if a session is found after loading
-    if (!feedbackLoading && sessionForFeedback) {
-      setChatbotOpen(true);
+    // Open chatbot automatically if there's a session to review
+    if (sessionForFeedback && !feedbackLoading) {
+      // setIsChatbotOpen(true); // Temporarily disable auto-opening
     }
   }, [sessionForFeedback, feedbackLoading]);
 
@@ -71,12 +73,28 @@ const DashboardClientLayout: React.FC<{ children: React.ReactNode }> = ({ childr
         <Navbar onMenuClick={toggleSidebar} />
         <main className="flex-1 p-6">{children}</main>
       </div>
-      <AnimatePresence>
-        {isChatbotOpen 
-            ? <FeedbackChatbot session={sessionForFeedback || undefined} onClose={() => setChatbotOpen(false)} />
-            : <ChatbotFab onClick={() => setChatbotOpen(true)} />
-        }
-      </AnimatePresence>
+      <div className="relative">
+        {!isChatbotOpen && (
+          <Button 
+            className="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-gradient-to-br from-purple-600 to-blue-500 text-white shadow-lg hover:scale-105 transition-transform z-40"
+            onClick={() => setIsChatbotOpen(true)}
+          >
+            <MessageSquareText size={32}/>
+            {sessionForFeedback && (
+              <span className="absolute top-0 right-0 block h-4 w-4 rounded-full bg-red-500 border-2 border-white" />
+            )}
+          </Button>
+        )}
+
+        <AnimatePresence>
+          {isChatbotOpen && (
+            <FeedbackChatbot 
+              session={sessionForFeedback || undefined}
+              onClose={() => setIsChatbotOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

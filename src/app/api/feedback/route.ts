@@ -33,10 +33,10 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { sessionId, sessionDate, adherence, feeling, pain, comment, planAdaptationRequested } = body;
+    const { sessionId, sessionDate, sessionTitle, adherence, sensation, pain, comment, planAdaptationRequested } = body;
 
     // Basic validation
-    if (!sessionId || !sessionDate || !adherence || !feeling || !pain) {
+    if (!sessionId || !sessionDate || !sensation || !pain) {
         return NextResponse.json({ error: 'Missing required feedback fields' }, { status: 400 });
     }
 
@@ -44,8 +44,9 @@ export async function POST(req: Request) {
       userId: user._id,
       sessionId,
       sessionDate,
+      sessionTitle,
       adherence,
-      feeling,
+      sensation,
       pain,
       comment,
       planAdaptationRequested,
