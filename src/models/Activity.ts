@@ -1,8 +1,8 @@
 import mongoose, { Schema, Document, models } from "mongoose";
 
 export interface IActivity extends Document {
-  userId: mongoose.Schema.Types.ObjectId;
-  stravaId: number;
+  user: mongoose.Schema.Types.ObjectId;
+  strava_id: string;
   type: string;
   name: string;
   distance: number;
@@ -18,8 +18,8 @@ export interface IActivity extends Document {
 }
 
 const ActivitySchema = new Schema<IActivity>({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  stravaId: { type: Number, required: true, unique: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  strava_id: { type: String, required: true, unique: true },
   type: { type: String },
   name: { type: String },
   distance: { type: Number },
@@ -34,4 +34,4 @@ const ActivitySchema = new Schema<IActivity>({
   data: { type: Schema.Types.Mixed },
 }, { timestamps: true });
 
-export default models.Activity || mongoose.model<IActivity>("Activity", ActivitySchema); 
+export default models.Activity || mongoose.model<IActivity>("Activity", ActivitySchema);

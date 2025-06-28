@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema({
   strava: {
     athlete_id: String,
     token: String,
+    refresh_token: String,
+    expires_at: Number,
   },
 });
 
