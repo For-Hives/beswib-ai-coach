@@ -17,7 +17,6 @@ const links = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Mon plan d'entrainement", href: "/training" },
   { label: "Calendrier", href: "/calendar" },
-  { label: "Profil", href: "/profile" },
   { label: "Coaches", href: "/coaches" },
 ]
 
